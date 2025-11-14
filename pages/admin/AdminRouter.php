@@ -11,9 +11,22 @@ $isEmployee = (
     (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
 );
 
+// ตรวจสอบว่าล็อกอินแล้วหรือยัง
+if (!isset($_SESSION['user_email'])) {
+    $_SESSION['flash_message'] = [
+        'type' => 'error',
+        'message' => 'กรุณาเข้าสู่ระบบก่อน'
+    ];
+    header("Location: /login.php");
+    exit;
+}
+
 // กำหนดหน้าที่พนักงาน (employee) สามารถเข้าถึงได้
 $employeeAllowed = ['payments', 'bookings', 'motorcycles', 'customers'];
+
+// ตรวจสอบสิทธิ์แสดงหน้า
 if (in_array($section, $employeeAllowed, true)) {
+    // หน้า employee
     if (!($isAdmin || $isEmployee)) {
         $_SESSION['flash_message'] = [
             'type' => 'error',
@@ -23,7 +36,7 @@ if (in_array($section, $employeeAllowed, true)) {
         exit;
     }
 } else {
-    // หน้าที่เหลือให้เฉพาะ admin เท่านั้น
+    // หน้า admin เท่านั้น
     if (!$isAdmin) {
         $_SESSION['flash_message'] = [
             'type' => 'error',
@@ -43,6 +56,11 @@ $adminPages = [
     'motorcycles' => 'pages/admin/sections/MotorcyclesManagement.php',
     'customers' => 'pages/admin/sections/CustomersManagement.php',
     'reports' => 'pages/admin/sections/ReportsPage.php',
+    'discounts' => 'pages/admin/sections/DiscountManagement.php',
+    // 'employee-management' => 'pages/admin/sections/EmployeeManagement.php',
+    // 'payment-verification' => 'pages/admin/sections/PaymentVerification.php',
+    // 'kyc-verification' => 'pages/admin/sections/CustomerKYC.php',
+    // 'owner-dashboard' => 'pages/admin/sections/OwnerDashboard.php',
 ];
 
 // (4) ตรวจสอบว่า section มีอยู่หรือไม่
@@ -131,6 +149,16 @@ if (array_key_exists($section, $adminPages)) {
                     <i data-lucide="file-text" class="inline h-4 w-4 mr-2"></i>
                     รายงาน
                 </a>
+
+                <!-- Discount Management -->
+                <a 
+                    href="index.php?page=admin&section=discounts" 
+                    class="px-3 py-2 font-medium text-sm rounded-t-lg <?php echo ($section === 'discounts') ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'; ?>"
+                >
+                    <i data-lucide="tag" class="inline h-4 w-4 mr-2"></i>
+                    ส่วนลด
+                </a>
+
                 <?php endif; ?>
             </nav>
         </div>
