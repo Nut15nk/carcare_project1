@@ -117,6 +117,11 @@ if ($motorcycle_id) {
 $error = '';
 $today = date('Y-m-d'); // สำหรับ date input min
 
+// (5) Initialize bookings in session if not exist
+if (!isset($_SESSION['mock_bookings'])) {
+    $_SESSION['mock_bookings'] = [];
+}
+
 // (5) ประมวลผลฟอร์ม (POST Request)
 // (เหมือน handleSubmit)
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -127,7 +132,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $returnLocation = $_POST['return_location'] ?? 'ร้านเทมป์เทชัน';
     
     // ดึงข้อมูลผู้ใช้จาก Session (เหมือน useAuth())
-    $userId = $_SESSION['user_id'] ?? 'guest'; // (ควรมี user_id ตอนล็อกอิน)
+    $userEmail = $_SESSION['user_email'] ?? 'guest@example.com';
+    $userName = $_SESSION['user_name'] ?? 'Guest User';
     
     // ตรวจสอบข้อมูล
     if (empty($startDate) || empty($endDate) || !$motorcycle) {
@@ -149,20 +155,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $specialOffers = "ส่วนลด {$discount} บาท สำหรับการเช่า {$totalDays} วัน (รับส่วนลด 50 บาท ทุก ๆ 3 วันที่เช่า )";
         }
 
-        // (7) จัดการไฟล์อัพโหลด (Payment Proof)
+        // (7) จัดการไฟล์อัพโหลด (Payment Proof) - Mock: just check file exists
         $paymentProofPath = null;
         if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] == UPLOAD_ERR_OK) {
-            
-            // (ในแอปจริง ควรสร้างโฟลเดอร์ uploads และตั้งค่า permissions)
-            $uploadDir = 'uploads/'; 
-            $fileName = time() . '_' . basename($_FILES['payment_proof']['name']);
-            $targetPath = $uploadDir . $fileName;
-            
-            if (move_uploaded_file($_FILES['payment_proof']['tmp_name'], $targetPath)) {
-                $paymentProofPath = $targetPath; // บันทึก path นี้ลง DB
-            } else {
-                $error = 'ไม่สามารถอัพโหลดไฟล์ได้';
-            }
+            // Mock: just use filename (no actual upload)
+            $paymentProofPath = basename($_FILES['payment_proof']['name']);
         } else {
             $error = 'กรุณาอัพโหลดหลักฐานการโอนเงิน';
         }
@@ -170,12 +167,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // (8) บันทึกการจอง (ถ้าไม่มี Error)
         if (empty($error)) {
             
-            // --- จำลองการบันทึกลงฐานข้อมูล ---
-            // $db->query("INSERT INTO bookings (motorcycleId, userId, ...) VALUES (...)");
-            // ----------------------------------
+            // Mock: Save booking to session
+            $bookingId = 'BK' . time();
+            $booking = [
+                'id' => $bookingId,
+                'motorcycleId' => $motorcycle['id'],
+                'motorcycleName' => $motorcycle['brand'] . ' ' . $motorcycle['model'],
+                'userEmail' => $userEmail,
+                'userName' => $userName,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'totalDays' => $totalDays,
+                'pricePerDay' => $motorcycle['pricePerDay'],
+                'totalPrice' => $totalPrice,
+                'discount' => $discount,
+                'returnLocation' => $returnLocation,
+                'paymentProof' => $paymentProofPath,
+                'status' => 'confirmed', // confirmed, pending, cancelled
+                'createdAt' => date('Y-m-d H:i:s'),
+            ];
+            
+            $_SESSION['mock_bookings'][] = $booking;
+            
+            // Redirect to success page or show message
+            $_SESSION['booking_success'] = 'สำเร็จ! การจองของคุณได้รับการยืนยัน';
+            header('Location: index.php?page=profile');
+            exit;
+        }
+    }
+}
 
-            // (9) Flash Message และ Redirect ถูกจัดการใน index.php แล้ว
-            // ไม่ต้องทำอะไรเพิ่มเติม
+// Get user's bookings from session
+$userBookings = [];
+if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
+    foreach ($_SESSION['mock_bookings'] as $booking) {
+        if ($booking['userEmail'] === $_SESSION['user_email']) {
+            $userBookings[] = $booking;
         }
     }
 }
@@ -184,7 +211,52 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <!-- (10) เริ่มส่วน HTML (View) -->
 <div class="min-h-screen bg-gray-50">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Show booking success message -->
+        <?php if (!empty($_SESSION['booking_success'])): ?>
+            <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+                <i data-lucide="check-circle" class="h-5 w-5"></i>
+                <span><?php echo $_SESSION['booking_success']; unset($_SESSION['booking_success']); ?></span>
+            </div>
+        <?php endif; ?>
+
+        <!-- My Bookings Section (show only if user is logged in) -->
+        <?php if (isset($_SESSION['user_email']) && !empty($userBookings)): ?>
+            <div class="mb-8">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">การจองของคุณ</h2>
+                <div class="grid grid-cols-1 gap-4">
+                    <?php foreach ($userBookings as $booking): ?>
+                        <div class="bg-white rounded-lg shadow p-4">
+                            <div class="flex flex-col md:flex-row gap-4 justify-between">
+                                <div>
+                                    <h3 class="font-semibold text-lg text-gray-900"><?php echo $booking['motorcycleName']; ?></h3>
+                                    <p class="text-sm text-gray-600">รหัสการจอง: <?php echo $booking['id']; ?></p>
+                                    <div class="mt-2 space-y-1 text-sm text-gray-700">
+                                        <p>📅 <?php echo date('d/m/Y', strtotime($booking['startDate'])); ?> ถึง <?php echo date('d/m/Y', strtotime($booking['endDate'])); ?></p>
+                                        <p>📍 สถานที่คืนรถ: <?php echo $booking['returnLocation']; ?></p>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col items-end justify-between">
+                                    <div class="text-right">
+                                        <p class="text-2xl font-bold text-blue-600">฿<?php echo number_format($booking['totalPrice']); ?></p>
+                                        <p class="text-sm text-gray-600"><?php echo $booking['totalDays']; ?> วัน</p>
+                                        <?php if ($booking['discount'] > 0): ?>
+                                            <p class="text-sm text-green-600">ส่วนลด ฿<?php echo $booking['discount']; ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div>
+                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium <?php echo $booking['status'] === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'; ?>">
+                                            <?php echo $booking['status'] === 'confirmed' ? '✓ ยืนยันแล้ว' : 'รอการยืนยัน'; ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        <?php endif; ?>
         
         <!-- (11) แสดงผลหากไม่พบรถ -->
         <?php if (!$motorcycle): ?>
@@ -200,7 +272,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </div>
 
-        <!-- (12) แสดงผลหากพบรถ -->
+        <!-- (11) แสดงผลหากพบรถ -->
         <?php else: ?>
             
             <!-- Back Button -->

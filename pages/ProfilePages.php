@@ -92,13 +92,12 @@ $motorcycles_data = [
     ]
 ];
 
-// (4) ดึงข้อมูลการจอง (จำลอง getUserBookings(userId))
+// (4) ดึงข้อมูลการจอง จาก mock_bookings (เก็บไว้ใน session โดย BookingPages.php)
 // เราจะกรองเฉพาะการจองที่เป็นของ user ที่ล็อกอินอยู่
-// (แทนการ hardcode userId = "1")
-$currentUserId = $_SESSION['user_email']; 
-$allBookings = $_SESSION['bookings'] ?? [];
-$userBookings = array_filter($allBookings, function($booking) use ($currentUserId) {
-    return $booking['userId'] === $currentUserId;
+$currentUserEmail = $_SESSION['user_email']; 
+$allBookings = $_SESSION['mock_bookings'] ?? [];
+$userBookings = array_filter($allBookings, function($booking) use ($currentUserEmail) {
+    return $booking['userEmail'] === $currentUserEmail;
 });
 
 // เรียงลำดับการจองใหม่ล่าสุดขึ้นก่อน
@@ -137,84 +136,41 @@ usort($userBookings, function($a, $b) {
         </div>
     </div>
 
-    <!-- (8) ส่วนการจองของฉัน (แปลงจาก React) -->
+    <!-- (8) ส่วนการจองของฉัน -->
     <h2 class="text-2xl font-semibold mb-4 text-gray-900">การจองของฉัน</h2>
     
     <?php if (empty($userBookings)): ?>
         <div class="bg-white p-6 rounded-lg shadow text-gray-500">
             ยังไม่มีการจอง
+            <a href="index.php?page=motorcycles" class="text-blue-600 hover:text-blue-700 ml-2">เลือกรถเพื่อจองเลย</a>
         </div>
     <?php else: ?>
-        <div class="space-y-6">
+        <div class="space-y-4">
             <?php foreach ($userBookings as $booking): ?>
-                <?php
-                // (9) ค้นหารถที่ตรงกับการจอง (เหมือน .find())
-                $motorcycle = null;
-                foreach ($motorcycles_data as $m) {
-                    if ($m['id'] == $booking['motorcycleId']) {
-                        $motorcycle = $m;
-                        break;
-                    }
-                }
-                
-                // (10) กำหนดสีของสถานะ
-                $statusColor = 'text-gray-600';
-                if ($booking['status'] === 'pending') $statusColor = 'text-yellow-600';
-                if ($booking['status'] === 'confirmed') $statusColor = 'text-blue-600';
-                if ($booking['status'] === 'active') $statusColor = 'text-green-600';
-                if ($booking['status'] === 'cancelled') $statusColor = 'text-red-600';
-                
-                $paymentColor = 'text-gray-600';
-                if ($booking['paymentStatus'] === 'pending') $paymentColor = 'text-yellow-600';
-                if ($booking['paymentStatus'] === 'paid') $paymentColor = 'text-green-600';
-
-                ?>
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex flex-col sm:flex-row gap-4">
-                        <!-- รูปภาพรถ (ซ้าย) -->
-                        <?php if ($motorcycle): ?>
-                        <div class="w-full sm:w-1/3">
-                            <img src="<?php echo htmlspecialchars($motorcycle['image']); ?>" alt="Bike" class="w-full h-32 object-cover rounded-lg">
-                        </div>
-                        <?php endif; ?>
-
-                        <!-- ข้อมูลการจอง (ขวา) -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex flex-col md:flex-row gap-4 justify-between">
                         <div class="flex-1">
-                            <h3 class="text-xl font-bold mb-2">
-                                <?php if ($motorcycle): ?>
-                                    <?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>
-                                <?php else: ?>
-                                    ไม่พบข้อมูลรถ (ID: <?php echo htmlspecialchars($booking['motorcycleId']); ?>)
-                                <?php endif; ?>
-                            </h3>
-                            
-                            <!-- แปลงจาก React -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-700 mb-3">
-                                <div><strong>วันที่รับ:</strong> <?php echo date('d/m/Y', strtotime($booking['startDate'])); ?></div>
-                                <div><strong>วันที่คืน:</strong> <?php echo date('d/m/Y', strtotime($booking['endDate'])); ?></div>
-                                <div><strong>จำนวนวัน:</strong> <?php echo $booking['totalDays']; ?> วัน</div>
-                                <div><strong>สถานที่คืน:</strong> <?php echo htmlspecialchars($booking['returnLocation']); ?></div>
+                            <h3 class="font-semibold text-lg text-gray-900"><?php echo $booking['motorcycleName']; ?></h3>
+                            <p class="text-sm text-gray-600">รหัสการจอง: <?php echo $booking['id']; ?></p>
+                            <div class="mt-2 space-y-1 text-sm text-gray-700">
+                                <p>📅 <?php echo date('d/m/Y', strtotime($booking['startDate'])); ?> ถึง <?php echo date('d/m/Y', strtotime($booking['endDate'])); ?></p>
+                                <p>📍 สถานที่คืนรถ: <?php echo $booking['returnLocation']; ?></p>
+                                <p>⏱️ จำนวนวัน: <?php echo $booking['totalDays']; ?> วัน</p>
                             </div>
-                            
-                            <div class="border-t pt-3 mt-3">
-                                <div class="text-lg font-semibold mb-2">
-                                    ราคารวม: <span class="text-blue-700">฿<?php echo number_format($booking['totalPrice'], 0); ?></span>
-                                </div>
-                                <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                                    <div>
-                                        สถานะ: <span class="font-medium <?php echo $statusColor; ?>"><?php echo htmlspecialchars($booking['status']); ?></span>
-                                    </div>
-                                    <div>
-                                        การชำระเงิน: <span class="font-medium <?php echo $paymentColor; ?>"><?php echo htmlspecialchars($booking['paymentStatus']); ?></span>
-                                    </div>
-                                </div>
-                                <?php if (!empty($booking['specialOffers'])): ?>
-                                    <div class="text-green-700 text-sm mt-2 p-2 bg-green-50 rounded">
-                                        🎉 <?php echo htmlspecialchars($booking['specialOffers']); ?>
-                                    </div>
+                        </div>
+                        <div class="flex flex-col items-end justify-between">
+                            <div class="text-right">
+                                <p class="text-2xl font-bold text-blue-600">฿<?php echo number_format($booking['totalPrice']); ?></p>
+                                <p class="text-sm text-gray-600">ราคารวม</p>
+                                <?php if ($booking['discount'] > 0): ?>
+                                    <p class="text-sm text-green-600">ส่วนลด ฿<?php echo $booking['discount']; ?></p>
                                 <?php endif; ?>
                             </div>
-                            <!-- จบส่วนแปลงจาก React -->
+                            <div>
+                                <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    ✓ <?php echo $booking['status'] === 'confirmed' ? 'ยืนยันแล้ว' : 'รอการยืนยัน'; ?>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
