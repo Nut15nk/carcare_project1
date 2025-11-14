@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
                                     <button name="action" value="confirm" class="px-3 py-1 bg-green-600 text-white rounded text-sm" onclick="return confirm('ยืนยันการจอง #<?php echo $b['id']; ?>?')">ยืนยัน</button>
                                     <button name="action" value="cancel" class="px-3 py-1 bg-red-500 text-white rounded text-sm" onclick="return confirm('ยกเลิกการจอง #<?php echo $b['id']; ?>?')">ยกเลิก</button>
                                 <?php else: ?>
-                                    <span class="text-sm text-gray-500">ไม่มีการกระทำ</span>
+                                    <span class="text-sm text-gray-500">เสร็จสิ้น</span>
                                 <?php endif; ?>
                             </form>
                         </td>

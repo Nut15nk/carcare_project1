@@ -201,7 +201,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 $userBookings = [];
 if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
     foreach ($_SESSION['mock_bookings'] as $booking) {
-        if ($booking['userEmail'] === $_SESSION['user_email']) {
+        if (isset($booking['userEmail']) && $booking['userEmail'] === $_SESSION['user_email']) {
             $userBookings[] = $booking;
         }
     }
