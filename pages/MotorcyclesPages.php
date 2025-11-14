@@ -3,8 +3,7 @@
 // ไม่ต้อง session_start() เพราะ index.php เรียกไปแล้ว
 
 // --- (1) ฐานข้อมูลจำลอง (Mock Database) ---
-// ใน React, นี่คือข้อมูลที่มาจาก useBooking().motorcycles
-// ใน PHP, เราต้องดึงมาจากฐานข้อมูลจริง (หรือสร้างข้อมูลจำลองแบบนี้)
+// (ในอนาคต ควรสรุปข้อมูลนี้จาก Database หรือ $_SESSION)
 $motorcycles_data = [
     [
         'id' => '1',
@@ -16,7 +15,7 @@ $motorcycles_data = [
         'image' => 'https://imgcdn.zigwheels.co.th/large/gallery/exterior/90/3251/honda-wave110i-2016-marketing-image-510506.jpg',
         'status' => 'available',
         'features' => ['ประหยัดน้ำมัน', 'ขับขี่ง่าย', 'เหมาะกับเมือง'],
-        'bookings' => []
+        'bookings' => [] // จำลองการจอง (ในอนาคตควรดึงจาก $_SESSION['bookings'])
     ],
     [
         'id' => '2',
@@ -40,7 +39,9 @@ $motorcycles_data = [
         'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/926/photos/shares/0125/Bike-Gallery-W926xH518_PX_Styling_01.jpg',
         'features' => ['หรูหรา', 'สะดวกสบาย', 'เทคโนโลยีทันสมัย'],
         'status' => 'available',
-        'bookings' => []
+        'bookings' => [
+            // ['start' => '2025-11-18', 'end' => '2025-11-20'] // ตัวอย่างการจอง
+        ]
     ],
     [
         'id' => '4',
@@ -84,7 +85,6 @@ $motorcycles_data = [
 
 /**
  * คำนวณส่วนลด (ลด 50 บาท ทุกๆ 3 วัน)
- * (คัดลอกจาก home.php)
  */
 function calculateDiscount($days, $pricePerDay) {
     $normalPrice = $days * $pricePerDay;
@@ -103,37 +103,42 @@ function calculateDiscount($days, $pricePerDay) {
  * ฟังก์ชันกรองรถที่ว่างตามวันที่
  * (จำลอง getAvailableMotorcycles)
  */
-function getAvailableMotorcycles($motorcycles, $startDate, $endDate) {
+function getAvailableMotorcycles($motorcycles, $startDate, $endDate, $allBookings) {
     if (empty($startDate) || empty($endDate)) return $motorcycles;
     try {
-        $start = new DateTime($startDate);
-        $end = new DateTime($endDate);
+        $requestStart = new DateTime($startDate);
+        $requestEnd = new DateTime($endDate);
     } catch (Exception $e) {
         return $motorcycles; // คืนค่าทั้งหมดถ้าวันที่ผิด
     }
-    
-    return array_filter($motorcycles, function($bike) use ($start, $end) {
-        // ถ้าสถานะไม่ว่าง ก็ไม่ต้องเช็ค
-        if ($bike['status'] !== 'available') return false;
 
-        foreach ($bike['bookings'] as $booking) {
-            try {
-                $bookingStart = new DateTime($booking['start']);
-                $bookingEnd = new DateTime($booking['end']);
-                
-                // ตรวจสอบการทับซ้อน (Overlap)
-                // ถ้า (วันเริ่มจอง < วันคืนรถที่จองแล้ว) และ (วันคืนรถ > วันเริ่มรถที่จองแล้ว)
-                if ($start < $bookingEnd && $end > $bookingStart) {
-                    return false; // เจอปัญหาทับซ้อน, รถไม่ว่าง
-                }
-            } catch (Exception $e) { /* ข้ามการจองที่ผิดพลาด */ }
-        }
-        return true; // ไม่ทับซ้อน, รถว่าง
+    // (A) สร้างรายการ ID รถมอเตอร์ไซค์ที่ "ไม่ว่าง" ในช่วงวันที่เลือก
+    $bookedMotorcycleIds = [];
+    foreach ($allBookings as $booking) {
+        // ข้ามการจองที่ยกเลิก
+        if ($booking['status'] === 'cancelled') continue;
+
+        try {
+            $bookingStart = new DateTime($booking['startDate']);
+            $bookingEnd = new DateTime($booking['endDate']);
+
+            // ตรวจสอบการทับซ้อน (Overlap)
+            // ถ้า (วันเริ่มจอง < วันคืนรถที่จองแล้ว) และ (วันคืนรถ > วันเริ่มรถที่จองแล้ว)
+            if ($requestStart < $bookingEnd && $requestEnd > $bookingStart) {
+                $bookedMotorcycleIds[] = $booking['motorcycleId'];
+            }
+        } catch (Exception $e) { /* ข้ามการจองที่ผิดพลาด */ }
+    }
+    
+    // (B) กรองรถ
+    return array_filter($motorcycles, function($bike) use ($bookedMotorcycleIds) {
+        // 1. รถต้อง 'available' (ไม่โดนซ่อม)
+        // 2. ID รถต้องไม่อยู่ในรายการ "ไม่ว่าง"
+        return $bike['status'] === 'available' && !in_array($bike['id'], $bookedMotorcycleIds);
     });
 }
 
 // --- (3) รับค่าตัวกรอง (แทน useState) ---
-// รับค่าจาก URL (GET parameters)
 $searchTerm = $_GET['search'] ?? '';
 $selectedBrand = $_GET['brand'] ?? '';
 $selectedType = $_GET['type'] ?? '';
@@ -142,15 +147,14 @@ $priceRangeMax = (int)($_GET['max_price'] ?? 1000);
 $startDate = $_GET['start_date'] ?? '';
 $endDate = $_GET['end_date'] ?? '';
 
+// ดึงการจองทั้งหมดจาก Session (เพื่อใช้กรองวันที่)
+$allBookings = $_SESSION['bookings'] ?? [];
+
 // --- (4) ตรรกะการกรอง (แทน useEffect) ---
 $filteredMotorcycles = $motorcycles_data;
 
 // 1. กรองตามวันที่ (ถ้าเลือก)
-// ใน React, เราจะอัปเดตสถานะ 'available' ของรถ
-// ใน PHP, เราจะกรองรถที่ไม่ว่างออกไปเลย
-if ($startDate && $endDate) {
-     $filteredMotorcycles = getAvailableMotorcycles($filteredMotorcycles, $startDate, $endDate);
-}
+$filteredMotorcycles = getAvailableMotorcycles($filteredMotorcycles, $startDate, $endDate, $allBookings);
 
 // 2. กรองตามคำค้นหา
 if ($searchTerm) {
@@ -350,6 +354,10 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                 <?php // แปลง {startDate && endDate && ...} ?>
                 <?php if ($startDate && $endDate): ?>
                     <span class="ml-2 text-blue-600">
+                        <!-- 
+                            (!!!) นี่คือจุดที่แก้ไขครับ (!!!)
+                            เปลี่ยนจาก Y-m-d เป็น d/m/Y 
+                        -->
                         สำหรับวันที่ <?php echo date('d/m/Y', strtotime($startDate)); ?> - <?php echo date('d/m/Y', strtotime($endDate)); ?>
                     </span>
                 <?php endif; ?>
@@ -372,6 +380,8 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                         <div class="absolute top-4 right-4">
                             <?php
                             // ตรรกะแสดงสถานะ
+                            // (เรากรองรถที่ไม่ว่างออกไปแล้ว ถ้เลือกวันที่)
+                            // (แต่ถ้าไม่เลือกวันที่, เราจะแสดงสถานะจริง)
                             $status = $motorcycle['status'];
                             $statusText = 'ซ่อมบำรุง';
                             $statusClass = 'bg-yellow-100 text-yellow-800';
@@ -436,7 +446,13 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                                 <span class="text-gray-600 text-sm">/วัน</span>
                             </div>
                             
-                            <?php if ($motorcycle['status'] === 'available'): ?>
+                            <?php 
+                            // ถ้าเลือกวันที่, รถคันนี้ "ว่าง" แน่นอน
+                            // ถ้าไม่เลือกวันที่, ให้เช็คสถานะจริง
+                            $isAvailable = $startDate && $endDate ? true : $motorcycle['status'] === 'available';
+                            ?>
+
+                            <?php if ($isAvailable): ?>
                                 <!-- แปลง <Link> เป็น <a> -->
                                 <a
                                     href="index.php?page=booking&id=<?php echo $motorcycle['id']; ?>"
@@ -486,7 +502,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                 </div>
                 <p class="text-gray-600 mb-4">
                     <?php if ($promoData['discount'] > 0): ?>
-                        ประหยัด <?php echo $promoData['discount']; ?> บาท...
+                        ประหยัด <?php echo $promoData['discount']; ?> บาท (ลด 50 บาท ทุกๆ 3 วัน)
                     <?php else: ?>
                         เช่าน้อยกว่า 3 วันยังไม่มีส่วนลด
                     <?php endif; ?>
