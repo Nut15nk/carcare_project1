@@ -2,90 +2,79 @@
 // pages/MotorcyclesPage.php
 // ไม่ต้อง session_start() เพราะ index.php เรียกไปแล้ว
 
-// --- (1) ฐานข้อมูลจำลอง (Mock Database) ---
-// (ในอนาคต ควรสรุปข้อมูลนี้จาก Database หรือ $_SESSION)
-$motorcycles_data = [
-    [
-        'id' => '1',
-        'brand' => 'Honda',
-        'model' => 'Wave 110i',
-        'cc' => 110,
-        'type' => 'Automatic',
-        'pricePerDay' => 250,
-        'image' => 'https://imgcdn.zigwheels.co.th/large/gallery/exterior/90/3251/honda-wave110i-2016-marketing-image-510506.jpg',
-        'status' => 'available',
-        'features' => ['ประหยัดน้ำมัน', 'ขับขี่ง่าย', 'เหมาะกับเมือง'],
-        'bookings' => [] // จำลองการจอง (ในอนาคตควรดึงจาก $_SESSION['bookings'])
-    ],
-    [
-        'id' => '2',
-        'brand' => 'Honda',
-        'model' => 'Click 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 300,
-        'image' => 'https://n9.cl/5vw6d4',
-        'features' => ['สปอร์ต', 'ออโตเมติก', 'ประหยัดน้ำมัน'],
-        'status' => 'available',
-        'bookings' => []
-    ],
-    [
-        'id' => '3',
-        'brand' => 'Honda',
-        'model' => 'PCX 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 400,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/926/photos/shares/0125/Bike-Gallery-W926xH518_PX_Styling_01.jpg',
-        'features' => ['หรูหรา', 'สะดวกสบาย', 'เทคโนโลยีทันสมัย'],
-        'status' => 'available',
-        'bookings' => [
-            // ['start' => '2025-11-18', 'end' => '2025-11-20'] // ตัวอย่างการจอง
-        ]
-    ],
-    [
-        'id' => '4',
-        'brand' => 'Yamaha',
-        'model' => 'NMAX',
-        'cc' => 155,
-        'type' => 'Automatic',
-        'pricePerDay' => 450,
-        'image' => 'https://n9.cl/5vw6d4',
-        'status' => 'available',
-        'features' => ['สปอร์ต', 'ประสิทธิภาพสูง', 'ดีไซน์ทันสมัย'],
-        'bookings' => []
-    ],
-    [
-        'id' => '5',
-        'brand' => 'Honda',
-        'model' => 'Giorno',
-        'cc' => 125,
-        'type' => 'Manual',
-        'pricePerDay' => 500,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/685/photos/shares/giorno/AW_GIORNO__Online_Color_Section_W685xH426px_2.png',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'สำหรับผู้เชี่ยวชาญ'],
-        'bookings' => []
-    ],
-    [
-        'id' => '6',
-        'brand' => 'Kawasaki',
-        'model' => 'Ninja 400',
-        'cc' => 400,
-        'type' => 'Manual',
-        'pricePerDay' => 800,
-        'image' => 'https://austinracingthailand.com/wp-content/uploads/2023/08/KA196.1.18-.jpeg',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'เครื่องยนต์ทรงพลัง'],
-        'bookings' => []
-    ]
+// โหลดไฟล์ API
+require_once '../api/config.php';
+require_once '../api/motorcycles.php';
+require_once '../api/auth.php';
+
+// --- (1) รับค่าตัวกรอง (แทน useState) ---
+$searchTerm = $_GET['search'] ?? '';
+$selectedBrand = $_GET['brand'] ?? '';
+$selectedType = $_GET['type'] ?? '';
+$priceRangeMin = (int)($_GET['min_price'] ?? 0);
+$priceRangeMax = (int)($_GET['max_price'] ?? 1000);
+$startDate = $_GET['start_date'] ?? '';
+$endDate = $_GET['end_date'] ?? '';
+
+// --- (2) ดึงข้อมูลจาก API ---
+try {
+    if ($startDate && $endDate) {
+        // ถ้ามีการเลือกวันที่ ให้ดึงเฉพาะรถที่ว่าง
+        $motorcycles_data = MotorcycleService::getAvailableMotorcycles($startDate, $endDate);
+    } else {
+        // ถ้าไม่เลือกวันที่ ให้ดึงรถทั้งหมด
+        $motorcycles_data = MotorcycleService::getAllMotorcycles();
+    }
+} catch (Exception $e) {
+    $motorcycles_data = [];
+    $error_message = "ไม่สามารถโหลดข้อมูลรถได้: " . $e->getMessage();
+}
+
+// --- (3) ตรรกะการกรอง (แทน useEffect) ---
+$filteredMotorcycles = $motorcycles_data;
+
+// 1. กรองตามคำค้นหา
+if ($searchTerm) {
+    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($searchTerm) {
+        $term = strtolower($searchTerm);
+        return str_contains(strtolower($bike['brand'] ?? ''), $term) || 
+               str_contains(strtolower($bike['model'] ?? ''), $term);
+    });
+}
+
+// 2. กรองตามยี่ห้อ
+if ($selectedBrand) {
+    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($selectedBrand) {
+        return ($bike['brand'] ?? '') === $selectedBrand;
+    });
+}
+
+// 3. กรองตามประเภท (ใช้ engineCc เป็นตัวแทน)
+if ($selectedType) {
+    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($selectedType) {
+        $engineCc = $bike['engineCc'] ?? 0;
+        if ($selectedType === 'small' && $engineCc <= 150) return true;
+        if ($selectedType === 'medium' && $engineCc > 150 && $engineCc <= 300) return true;
+        if ($selectedType === 'large' && $engineCc > 300) return true;
+        return false;
+    });
+}
+
+// 4. กรองตามราคา
+$filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($priceRangeMin, $priceRangeMax) {
+    $price = $bike['pricePerDay'] ?? 0;
+    return $price >= $priceRangeMin && $price <= $priceRangeMax;
+});
+
+// --- (4) เตรียมข้อมูลสำหรับ Dropdowns ---
+$brands = array_unique(array_column($motorcycles_data, 'brand'));
+$types = [
+    'small' => 'เล็ก (≤ 150cc)',
+    'medium' => 'กลาง (151-300cc)', 
+    'large' => 'ใหญ่ (> 300cc)'
 ];
 
-// --- (2) ฟังก์ชัน Helpers (แปลงจาก React) ---
-
-/**
- * คำนวณส่วนลด (ลด 50 บาท ทุกๆ 3 วัน)
- */
+// --- (5) คำนวณโปรโมชั่น ---
 function calculateDiscount($days, $pricePerDay) {
     $normalPrice = $days * $pricePerDay;
     $discount = 0;
@@ -99,103 +88,13 @@ function calculateDiscount($days, $pricePerDay) {
     ];
 }
 
-/**
- * ฟังก์ชันกรองรถที่ว่างตามวันที่
- * (จำลอง getAvailableMotorcycles)
- */
-function getAvailableMotorcycles($motorcycles, $startDate, $endDate, $allBookings) {
-    if (empty($startDate) || empty($endDate)) return $motorcycles;
-    try {
-        $requestStart = new DateTime($startDate);
-        $requestEnd = new DateTime($endDate);
-    } catch (Exception $e) {
-        return $motorcycles; // คืนค่าทั้งหมดถ้าวันที่ผิด
-    }
-
-    // (A) สร้างรายการ ID รถมอเตอร์ไซค์ที่ "ไม่ว่าง" ในช่วงวันที่เลือก
-    $bookedMotorcycleIds = [];
-    foreach ($allBookings as $booking) {
-        // ข้ามการจองที่ยกเลิก
-        if ($booking['status'] === 'cancelled') continue;
-
-        try {
-            $bookingStart = new DateTime($booking['startDate']);
-            $bookingEnd = new DateTime($booking['endDate']);
-
-            // ตรวจสอบการทับซ้อน (Overlap)
-            // ถ้า (วันเริ่มจอง < วันคืนรถที่จองแล้ว) และ (วันคืนรถ > วันเริ่มรถที่จองแล้ว)
-            if ($requestStart < $bookingEnd && $requestEnd > $bookingStart) {
-                $bookedMotorcycleIds[] = $booking['motorcycleId'];
-            }
-        } catch (Exception $e) { /* ข้ามการจองที่ผิดพลาด */ }
-    }
-    
-    // (B) กรองรถ
-    return array_filter($motorcycles, function($bike) use ($bookedMotorcycleIds) {
-        // 1. รถต้อง 'available' (ไม่โดนซ่อม)
-        // 2. ID รถต้องไม่อยู่ในรายการ "ไม่ว่าง"
-        return $bike['status'] === 'available' && !in_array($bike['id'], $bookedMotorcycleIds);
-    });
-}
-
-// --- (3) รับค่าตัวกรอง (แทน useState) ---
-$searchTerm = $_GET['search'] ?? '';
-$selectedBrand = $_GET['brand'] ?? '';
-$selectedType = $_GET['type'] ?? '';
-$priceRangeMin = (int)($_GET['min_price'] ?? 0);
-$priceRangeMax = (int)($_GET['max_price'] ?? 1000);
-$startDate = $_GET['start_date'] ?? '';
-$endDate = $_GET['end_date'] ?? '';
-
-// ดึงการจองทั้งหมดจาก Session (เพื่อใช้กรองวันที่)
-$allBookings = $_SESSION['bookings'] ?? [];
-
-// --- (4) ตรรกะการกรอง (แทน useEffect) ---
-$filteredMotorcycles = $motorcycles_data;
-
-// 1. กรองตามวันที่ (ถ้าเลือก)
-$filteredMotorcycles = getAvailableMotorcycles($filteredMotorcycles, $startDate, $endDate, $allBookings);
-
-// 2. กรองตามคำค้นหา
-if ($searchTerm) {
-    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($searchTerm) {
-        $term = strtolower($searchTerm);
-        return str_contains(strtolower($bike['brand']), $term) || 
-               str_contains(strtolower($bike['model']), $term);
-    });
-}
-
-// 3. กรองตามยี่ห้อ
-if ($selectedBrand) {
-    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($selectedBrand) {
-        return $bike['brand'] === $selectedBrand;
-    });
-}
-
-// 4. กรองตามประเภท
-if ($selectedType) {
-    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($selectedType) {
-        return $bike['type'] === $selectedType;
-    });
-}
-
-// 5. กรองตามราคา
-$filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($priceRangeMin, $priceRangeMax) {
-    return $bike['pricePerDay'] >= $priceRangeMin && $bike['pricePerDay'] <= $priceRangeMax;
-});
-
-// --- (5) เตรียมข้อมูลสำหรับ Dropdowns ---
-$brands = array_unique(array_column($motorcycles_data, 'brand'));
-$types = array_unique(array_column($motorcycles_data, 'type'));
-
-// --- (6) คำนวณโปรโมชั่น (เหมือน React) ---
 $promoDays = 3;
 $promoPricePerDay = 950 / 3;
 $promoData = calculateDiscount($promoDays, $promoPricePerDay);
 
 ?>
 
-<!-- (7) เริ่มส่วน HTML (เทียบเท่า return() ของ React) -->
+<!-- (6) เริ่มส่วน HTML -->
 <div class="min-h-screen bg-gray-50">
     <!-- Hero Section -->
     <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-12">
@@ -210,16 +109,13 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         <!-- Search and Filter Section -->
-        <!-- นี่คือฟอร์มที่จะส่งค่า GET กลับไปที่ index.php (Router) -->
         <form method="GET" action="index.php">
-            <!-- (สำคัญ) ต้องส่ง page=motorcycles กลับไปด้วยเสมอ -->
             <input type="hidden" name="page" value="motorcycles">
 
             <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
                 <div class="flex flex-col lg:flex-row gap-4 mb-4">
                     <!-- Search -->
                     <div class="flex-1 relative">
-                        <!-- แปลง <Search> เป็น <i data-lucide="..."> -->
                         <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5"></i>
                         <input
                             type="text"
@@ -238,6 +134,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                                 name="start_date"
                                 value="<?php echo htmlspecialchars($startDate); ?>"
                                 class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                min="<?php echo date('Y-m-d'); ?>"
                             />
                         </div>
                         <div>
@@ -247,6 +144,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                                 name="end_date"
                                 value="<?php echo htmlspecialchars($endDate); ?>"
                                 class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                min="<?php echo date('Y-m-d'); ?>"
                             />
                         </div>
                     </div>
@@ -259,14 +157,13 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                         <i data-lucide="filter" class="h-5 w-5"></i>
                         ตัวกรอง
                     </button>
-                    <!-- ปุ่ม Submit ของฟอร์ม (ถูกซ่อนไว้ แต่จำเป็น) -->
+                    <!-- ปุ่ม Submit -->
                      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
                         ค้นหา
                     </button>
                 </div>
                 
-                <!-- Advanced Filters (ซ่อน/แสดง ด้วย JS) -->
-                <!-- React ใช้ {showFilters && ...} PHP ใช้ JS ด้านล่าง -->
+                <!-- Advanced Filters -->
                 <div id="advanced-filters" class="border-t pt-4 mt-4 hidden">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <!-- Brand Filter -->
@@ -280,7 +177,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                                 <?php foreach ($brands as $brand): ?>
                                     <option 
                                         value="<?php echo $brand; ?>"
-                                        <?php if ($selectedBrand == $brand) echo 'selected'; // ทำให้จำค่าที่เลือกได้ ?>
+                                        <?php if ($selectedBrand == $brand) echo 'selected'; ?>
                                     >
                                         <?php echo $brand; ?>
                                     </option>
@@ -289,23 +186,23 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                         </div>
                         <!-- Type Filter -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">ประเภท</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">ขนาดเครื่อง</label>
                             <select
                                 name="type"
                                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
-                                <option value="">ทุกประเภท</option>
-                                <?php foreach ($types as $type): ?>
+                                <option value="">ทุกขนาด</option>
+                                <?php foreach ($types as $key => $label): ?>
                                     <option 
-                                        value="<?php echo $type; ?>"
-                                        <?php if ($selectedType == $type) echo 'selected'; ?>
+                                        value="<?php echo $key; ?>"
+                                        <?php if ($selectedType == $key) echo 'selected'; ?>
                                     >
-                                        <?php echo $type; ?>
+                                        <?php echo $label; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <!-- Price Range (เปลี่ยนจาก Range Slider เป็น Number Input) -->
+                        <!-- Price Range -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                 ราคาต่อวัน
@@ -331,9 +228,8 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                                 />
                             </div>
                         </div>
-                        <!-- Reset Button (เปลี่ยนเป็น Link) -->
+                        <!-- Reset Button -->
                         <div class="flex items-end">
-                            <!-- ลิงก์นี้จะล้างค่า GET ทั้งหมด -->
                             <a
                                 href="index.php?page=motorcycles"
                                 class="w-full text-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors"
@@ -344,55 +240,46 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                     </div>
                 </div>
             </div>
-        </form> <!-- จบฟอร์ม -->
+        </form>
 
         <!-- Results Summary -->
         <div class="mb-6">
             <p class="text-gray-600">
                 พบรถจักรยานยนต์ <?php echo count($filteredMotorcycles); ?> คัน
                 
-                <?php // แปลง {startDate && endDate && ...} ?>
                 <?php if ($startDate && $endDate): ?>
                     <span class="ml-2 text-blue-600">
-                        <!-- 
-                            (!!!) นี่คือจุดที่แก้ไขครับ (!!!)
-                            เปลี่ยนจาก Y-m-d เป็น d/m/Y 
-                        -->
                         สำหรับวันที่ <?php echo date('d/m/Y', strtotime($startDate)); ?> - <?php echo date('d/m/Y', strtotime($endDate)); ?>
                     </span>
                 <?php endif; ?>
             </p>
         </div>
 
+        <!-- Error Message -->
+        <?php if (isset($error_message)): ?>
+            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+                <?php echo $error_message; ?>
+            </div>
+        <?php endif; ?>
+
         <!-- Motorcycles Grid -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            <?php // แปลง .map() เป็น foreach ?>
             <?php foreach ($filteredMotorcycles as $motorcycle): ?>
                 <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
                     <!-- Image -->
                     <div class="relative h-48 bg-gray-200">
                         <img
-                            src="<?php echo htmlspecialchars($motorcycle['image']); ?>"
+                            src="<?php echo htmlspecialchars($motorcycle['imageUrl'] ?? '../img/default-bike.jpg'); ?>"
                             alt="<?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>"
                             class="w-full h-full object-cover"
+                            onerror="this.src='../img/default-bike.jpg'"
                         />
                         <div class="absolute top-4 right-4">
                             <?php
-                            // ตรรกะแสดงสถานะ
-                            // (เรากรองรถที่ไม่ว่างออกไปแล้ว ถ้เลือกวันที่)
-                            // (แต่ถ้าไม่เลือกวันที่, เราจะแสดงสถานะจริง)
-                            $status = $motorcycle['status'];
-                            $statusText = 'ซ่อมบำรุง';
-                            $statusClass = 'bg-yellow-100 text-yellow-800';
-                            
-                            if ($status === 'available') {
-                                $statusText = 'พร้อมใช้งาน';
-                                $statusClass = 'bg-green-100 text-green-800';
-                            } elseif ($status === 'booked') {
-                                $statusText = 'ถูกจอง';
-                                $statusClass = 'bg-red-100 text-red-800';
-                            }
+                            $isAvailable = $motorcycle['isAvailable'] ?? false;
+                            $statusText = $isAvailable ? 'พร้อมใช้งาน' : 'ไม่ว่าง';
+                            $statusClass = $isAvailable ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
                             ?>
                             <span class="px-2 py-1 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
                                 <?php echo $statusText; ?>
@@ -413,49 +300,38 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                         <div class="flex items-center gap-4 text-sm text-gray-600 mb-4">
                             <div class="flex items-center gap-1">
                                 <i data-lucide="fuel" class="h-4 w-4"></i>
-                                <span><?php echo $motorcycle['cc']; ?>cc</span>
+                                <span><?php echo $motorcycle['engineCc'] ?? 'N/A'; ?>cc</span>
                             </div>
                             <div class="flex items-center gap-1">
-                                <i data-lucide="users" class="h-4 w-4"></i>
-                                <span><?php echo htmlspecialchars($motorcycle['type']); ?></span>
+                                <i data-lucide="calendar" class="h-4 w-4"></i>
+                                <span><?php echo $motorcycle['year'] ?? 'N/A'; ?></span>
                             </div>
                         </div>
-                        <!-- Features -->
+                        <!-- Description -->
                         <div class="mb-4">
-                            <div class="flex flex-wrap gap-1">
-                                <?php // แสดง 3 feature แรก ?>
-                                <?php foreach (array_slice($motorcycle['features'], 0, 3) as $feature): ?>
-                                    <span class="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">
-                                        <?php echo htmlspecialchars($feature); ?>
-                                    </span>
-                                <?php endforeach; ?>
-                                
-                                <?php if (count($motorcycle['features']) > 3): ?>
-                                    <span class="px-2 py-1 bg-gray-50 text-gray-600 text-xs rounded-full">
-                                        +<?php echo count($motorcycle['features']) - 3; ?> อื่นๆ
-                                    </span>
-                                <?php endif; ?>
-                            </div>
+                            <p class="text-gray-600 text-sm">
+                                <?php echo htmlspecialchars($motorcycle['description'] ?? 'รถจักรยานยนต์คุณภาพดี'); ?>
+                            </p>
                         </div>
                         <!-- Price and Action -->
                         <div class="flex justify-between items-center">
                             <div>
                                 <span class="text-2xl font-bold text-blue-600">
-                                    ฿<?php echo $motorcycle['pricePerDay']; ?>
+                                    ฿<?php echo number_format($motorcycle['pricePerDay'], 2); ?>
                                 </span>
                                 <span class="text-gray-600 text-sm">/วัน</span>
                             </div>
                             
                             <?php 
-                            // ถ้าเลือกวันที่, รถคันนี้ "ว่าง" แน่นอน
+                            $isAvailable = $motorcycle['isAvailable'] ?? false;
+                            // ถ้าเลือกวันที่, ให้สามารถจองได้ถ้ารถว่าง
                             // ถ้าไม่เลือกวันที่, ให้เช็คสถานะจริง
-                            $isAvailable = $startDate && $endDate ? true : $motorcycle['status'] === 'available';
+                            $canBook = $isAvailable;
                             ?>
 
-                            <?php if ($isAvailable): ?>
-                                <!-- แปลง <Link> เป็น <a> -->
+                            <?php if ($canBook): ?>
                                 <a
-                                    href="index.php?page=booking&id=<?php echo $motorcycle['id']; ?>"
+                                    href="index.php?page=booking&id=<?php echo $motorcycle['motorcycleId']; ?>"
                                     class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
                                 >
                                     จองเลย
@@ -491,7 +367,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
             </div>
         <?php endif; ?>
 
-        <!-- Special Offers (คัดลอกตรรกะจาก home.php) -->
+        <!-- Special Offers -->
         <div class="mt-12 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg p-8 text-center">
             <h2 class="text-2xl font-bold text-white mb-4">โปรโมชั่นพิเศษ!</h2>
             <div class="bg-white rounded-lg p-6 max-w-md mx-auto">
@@ -516,7 +392,7 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
     </div>
 </div>
 
-<!-- (8) JavaScript สำหรับซ่อน/แสดงตัวกรอง -->
+<!-- JavaScript สำหรับซ่อน/แสดงตัวกรอง -->
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const filterButton = document.getElementById('filter-toggle-button');
@@ -532,5 +408,11 @@ $promoData = calculateDiscount($promoDays, $promoPricePerDay);
                 filterContent.classList.remove('hidden');
             <?php endif; ?>
         }
+
+        // ตั้งค่าวันที่ขั้นต่ำเป็นวันนี้
+        const today = new Date().toISOString().split('T')[0];
+        document.querySelectorAll('input[type="date"]').forEach(input => {
+            input.min = today;
+        });
     });
 </script>

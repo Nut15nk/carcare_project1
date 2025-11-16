@@ -1,77 +1,144 @@
 <?php
-/**
- * API Configuration File
- * Centralized API settings and base URLs
- */
+// api/config.php (เวอร์ชันใหม่)
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// โหลด autoload จาก vendor ที่ติดตั้งผ่าน Composer
+require_once __DIR__ . '/../vendor/autoload.php';
 
-// API Base URLs
-define('API_BASE_URL', 'http://localhost:8000/api');
-define('API_TIMEOUT', 30); // seconds
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
 
-// API Response Headers
-header('Content-Type: application/json; charset=utf-8');
-
-// Helper function to make API requests
-function makeApiRequest($method, $endpoint, $data = null, $headers = []) {
-    $url = API_BASE_URL . $endpoint;
+class ApiConfig {
+    const BASE_URL = 'http://localhost:8080/api';
     
-    $defaultHeaders = [
-        'Content-Type: application/json',
-    ];
-    
-    // Add auth token if user is logged in
-    if (isset($_SESSION['auth_token'])) {
-        $defaultHeaders['Authorization'] = 'Bearer ' . $_SESSION['auth_token'];
+    public static function makeApiCall($url, $method = 'GET', $data = null, $token = null, $customHeaders = []) {
+        $fullUrl = self::BASE_URL . $url;
+        
+        // ใช้ Guzzle เป็นหลัก (ตอนนี้ใช้งานได้แล้ว)
+        return self::makeGuzzleCall($fullUrl, $method, $data, $token, $customHeaders);
     }
     
-    $headers = array_merge($defaultHeaders, $headers);
-    
-    $options = [
-        'http' => [
-            'method' => $method,
-            'headers' => $headers,
-            'timeout' => API_TIMEOUT
-        ]
-    ];
-    
-    if ($data !== null) {
-        $options['http']['content'] = json_encode($data);
-    }
-    
-    $context = stream_context_create($options);
-    
-    try {
-        $response = @file_get_contents($url, false, $context);
-        if ($response === false) {
-            return [
-                'success' => false,
-                'error' => 'API request failed',
-                'status_code' => 500
+    private static function makeGuzzleCall($fullUrl, $method, $data, $token, $customHeaders) {
+        try {
+            $client = new Client([
+                'timeout' => 30,
+                'http_errors' => false // ไม่ throw exception สำหรับ HTTP errors
+            ]);
+            
+            $options = [
+                'headers' => array_merge([
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ], $customHeaders)
             ];
+            
+            if ($token) {
+                $options['headers']['Authorization'] = 'Bearer ' . $token;
+            }
+            
+            if ($data && in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+                $options['json'] = $data;
+            }
+            
+            $response = $client->request($method, $fullUrl, $options);
+            
+            return [
+                'status' => $response->getStatusCode(),
+                'data' => json_decode($response->getBody(), true),
+                'method' => 'guzzle',
+                'success' => $response->getStatusCode() >= 200 && $response->getStatusCode() < 300
+            ];
+            
+        } catch (Exception $e) {
+            // Fallback to file_get_contents ถ้า Guzzle error
+            error_log("Guzzle error: " . $e->getMessage());
+            return self::makeFileGetContentsCall($fullUrl, $method, $data, $token, $customHeaders);
         }
+    }
+    
+    // Fallback function (เก็บไว้เป็น backup)
+    private static function makeFileGetContentsCall($fullUrl, $method, $data, $token, $customHeaders) {
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ];
+        
+        if ($token) {
+            $headers[] = 'Authorization: Bearer ' . $token;
+        }
+        
+        $headers = array_merge($headers, $customHeaders);
+        
+        $options = [
+            'http' => [
+                'method' => strtoupper($method),
+                'header' => implode("\r\n", $headers),
+                'timeout' => 30,
+                'ignore_errors' => true
+            ]
+        ];
+        
+        if ($data && in_array(strtoupper($method), ['POST', 'PUT', 'PATCH'])) {
+            $options['http']['content'] = json_encode($data);
+        }
+        
+        $context = stream_context_create($options);
+        $response = @file_get_contents($fullUrl, false, $context);
+        
+        $httpCode = 200;
+        if (isset($http_response_header[0])) {
+            preg_match('/HTTP\/\d\.\d\s+(\d+)/', $http_response_header[0], $matches);
+            $httpCode = isset($matches[1]) ? (int)$matches[1] : 200;
+        }
+        
         return [
-            'success' => true,
+            'status' => $httpCode,
             'data' => json_decode($response, true),
-            'status_code' => 200
+            'method' => 'file_get_contents',
+            'success' => $httpCode >= 200 && $httpCode < 300
         ];
-    } catch (Exception $e) {
+    }
+    
+    // ตรวจสอบว่า Guzzle พร้อมใช้งาน
+    public static function isGuzzleAvailable() {
+        return class_exists('GuzzleHttp\Client');
+    }
+    
+    // ฟังก์ชันตรวจสอบระบบ
+    public static function getSystemInfo() {
         return [
-            'success' => false,
-            'error' => $e->getMessage(),
-            'status_code' => 500
+            'guzzle_available' => self::isGuzzleAvailable(),
+            'composer_vendor_exists' => is_dir(__DIR__ . '/../vendor/') ? 'YES' : 'NO',
+            'curl_available' => function_exists('curl_init'),
+            'file_get_contents_available' => function_exists('file_get_contents'),
+            'php_version' => PHP_VERSION
         ];
+    }
+    
+    // ฟังก์ชันดึง error message
+    public static function getErrorMessage($response) {
+        if (isset($response['error'])) {
+            return $response['error'];
+        }
+        
+        if (isset($response['data']['message'])) {
+            return $response['data']['message'];
+        }
+        
+        return 'Unknown error occurred';
     }
 }
 
-// Helper function to return JSON response
-function jsonResponse($data, $statusCode = 200) {
-    http_response_code($statusCode);
-    echo json_encode($data);
+// Test function
+if (isset($_GET['test'])) {
+    header('Content-Type: application/json');
+    
+    $systemInfo = ApiConfig::getSystemInfo();
+    $testResponse = ApiConfig::makeApiCall('/motorcycles', 'GET');
+    
+    echo json_encode([
+        'system_info' => $systemInfo,
+        'api_test' => $testResponse,
+        'timestamp' => date('Y-m-d H:i:s')
+    ], JSON_PRETTY_PRINT);
     exit;
 }
-?>

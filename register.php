@@ -11,8 +11,8 @@ $password = '';
 $confirmPassword = '';
 
 // If user already logged in, redirect to profile/home
-if (isset($_SESSION['user_email'])) {
-    header('Location: index.php?page=profile');
+if (isset($_SESSION['user'])) {
+    header('Location: index.php');
     exit;
 }
 
@@ -32,12 +32,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($password) < 6) {
         $error = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     } else {
-        // Simulate successful registration
-        $_SESSION['user_email'] = $email;
-        $_SESSION['user_name'] = $name;
-        $_SESSION['user_role'] = 'customer';
-        header('Location: index.php?page=home');
-        exit;
+        // โหลดไฟล์ API
+        require_once '../api/config.php';
+        require_once '../api/auth.php';
+
+        // ใช้ API จริงแทน mock data
+        $userData = [
+            'email' => $email,
+            'password' => $password,
+            'confirmPassword' => $confirmPassword,
+            'firstName' => explode(' ', $name)[0] ?? $name,
+            'lastName' => explode(' ', $name)[1] ?? '',
+            'phone' => $phone,
+            'address' => $lineId ? "Line ID: {$lineId}" : '',
+            'licenseNumber' => 'PENDING', // ต้องอัพเดททีหลัง
+            'idCardNumber' => 'PENDING' // ต้องอัพเดททีหลัง
+        ];
+        
+        $user = AuthService::register($userData);
+        
+        if ($user) {
+            $_SESSION['user'] = $user;
+            header('Location: index.php');
+            exit;
+        } else {
+            $error = 'การสมัครสมาชิกล้มเหลว หรืออีเมลนี้มีผู้ใช้แล้ว';
+        }
     }
 }
 ?>
