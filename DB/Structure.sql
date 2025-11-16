@@ -5,11 +5,11 @@ USE motorcycle_rental;
 -- 1. ตารางเจ้าของร้าน
 CREATE TABLE owners (
     owner_id VARCHAR(50) PRIMARY KEY,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,  -- แก้เป็น 255
     password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    phone VARCHAR(15) NOT NULL,
+    first_name VARCHAR(255) NOT NULL,    -- แก้เป็น 255
+    last_name VARCHAR(255) NOT NULL,     -- แก้เป็น 255
+    phone VARCHAR(255) NOT NULL,         -- แก้เป็น 255
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -18,13 +18,13 @@ CREATE TABLE owners (
 CREATE TABLE employees (
     employee_id VARCHAR(50) PRIMARY KEY,
     owner_id VARCHAR(50) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,  -- แก้เป็น 255
     password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    phone VARCHAR(15) NOT NULL,
-    position VARCHAR(50) DEFAULT 'staff',
-    is_active BOOLEAN DEFAULT TRUE,
+    first_name VARCHAR(255) NOT NULL,    -- แก้เป็น 255
+    last_name VARCHAR(255) NOT NULL,     -- แก้เป็น 255
+    phone VARCHAR(255) NOT NULL,         -- แก้เป็น 255
+    position VARCHAR(255) DEFAULT 'staff', -- แก้เป็น 255
+    is_active TINYINT(1) DEFAULT TRUE,   -- แก้เป็น TINYINT(1)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (owner_id) REFERENCES owners(owner_id) ON DELETE CASCADE
@@ -33,16 +33,16 @@ CREATE TABLE employees (
 -- 3. ตารางลูกค้า
 CREATE TABLE customers (
     customer_id VARCHAR(50) PRIMARY KEY,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,  -- แก้เป็น 255
     password_hash VARCHAR(255) NOT NULL,
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    phone VARCHAR(15) NOT NULL,
-    address TEXT,
-    license_number VARCHAR(20),
+    first_name VARCHAR(255) NOT NULL,    -- แก้เป็น 255
+    last_name VARCHAR(255) NOT NULL,     -- แก้เป็น 255
+    phone VARCHAR(255) NOT NULL,         -- แก้เป็น 255
+    address VARCHAR(255),                -- แก้เป็น VARCHAR(255)
+    license_number VARCHAR(255),         -- แก้เป็น VARCHAR(255)
     date_of_birth DATE,
-    id_card_number VARCHAR(13),
-    is_verified BOOLEAN DEFAULT FALSE,
+    id_card_number VARCHAR(255),         -- แก้เป็น VARCHAR(255)
+    is_verified TINYINT(1) DEFAULT FALSE, -- แก้เป็น TINYINT(1)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -50,17 +50,17 @@ CREATE TABLE customers (
 -- 4. ตารางรถจักรยานยนต์
 CREATE TABLE motorcycles (
     motorcycle_id VARCHAR(50) PRIMARY KEY,
-    brand VARCHAR(50) NOT NULL,
-    model VARCHAR(50) NOT NULL,
-    year YEAR,
-    license_plate VARCHAR(15) UNIQUE NOT NULL,
-    color VARCHAR(30),
+    brand VARCHAR(255) NOT NULL,         -- แก้เป็น 255
+    model VARCHAR(255) NOT NULL,         -- แก้เป็น 255
+    year INT,
+    license_plate VARCHAR(255) UNIQUE NOT NULL, -- แก้เป็น 255
+    color VARCHAR(255),                  -- แก้เป็น 255
     engine_cc INT,
     price_per_day DECIMAL(10,2) NOT NULL,
     image_url VARCHAR(255),
-    is_available BOOLEAN DEFAULT TRUE,
+    is_available TINYINT(1) DEFAULT TRUE, -- แก้เป็น TINYINT(1)
     description TEXT,
-    maintenance_status ENUM('ready', 'maintenance', 'repair') DEFAULT 'ready',
+    maintenance_status VARCHAR(20) DEFAULT 'ready',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -69,15 +69,15 @@ CREATE TABLE motorcycles (
 CREATE TABLE reservations (
     reservation_id VARCHAR(50) PRIMARY KEY,
     customer_id VARCHAR(50) NOT NULL,
-    employee_id VARCHAR(50), -- NULL ได้ถ้าลูกค้าจองผ่านเว็บ
+    employee_id VARCHAR(50),
     motorcycle_id VARCHAR(50) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     total_days INT NOT NULL,
     total_price DECIMAL(10,2) NOT NULL,
-    status ENUM('pending', 'confirmed', 'active', 'completed', 'cancelled') DEFAULT 'pending',
+    status VARCHAR(20) DEFAULT 'pending',
     deposit_amount DECIMAL(10,2) NOT NULL,
-    discount_amount DECIMAL(10,2) DEFAULT 0,
+    discount_amount DECIMAL(10,2) DEFAULT 0.00,
     final_price DECIMAL(10,2) NOT NULL,
     pickup_location VARCHAR(255),
     return_location VARCHAR(255),
@@ -91,13 +91,13 @@ CREATE TABLE reservations (
 
 -- 6. ตารางการชำระเงิน
 CREATE TABLE payments (
-    payment_id VARCHAR(50) PRIMARY KEY,
+    payment_id VARCHAR(255) PRIMARY KEY, -- แก้เป็น VARCHAR(255)
     reservation_id VARCHAR(50) UNIQUE NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
-    payment_method ENUM('cash', 'credit_card', 'bank_transfer', 'qr_code') NOT NULL,
-    payment_status ENUM('pending', 'paid', 'failed', 'refunded') DEFAULT 'pending',
+    payment_method VARCHAR(20) NOT NULL,
+    payment_status VARCHAR(20) DEFAULT 'pending',
     payment_date TIMESTAMP NULL,
-    transaction_id VARCHAR(100),
+    transaction_id VARCHAR(255),         -- แก้เป็น VARCHAR(255)
     slip_image_url VARCHAR(255),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -107,15 +107,15 @@ CREATE TABLE payments (
 -- 7. ตารางส่วนลด
 CREATE TABLE discounts (
     discount_id VARCHAR(50) PRIMARY KEY,
-    discount_code VARCHAR(20) UNIQUE NOT NULL,
-    discount_type ENUM('percentage', 'fixed') NOT NULL,
+    discount_code VARCHAR(255) UNIQUE NOT NULL, -- แก้เป็น 255
+    discount_type VARCHAR(20) NOT NULL,
     discount_value DECIMAL(10,2) NOT NULL,
     min_rental_days INT DEFAULT 1,
     max_discount_amount DECIMAL(10,2),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_by VARCHAR(50) NOT NULL, -- owner ที่สร้างส่วนลด
+    is_active TINYINT(1) DEFAULT TRUE,   -- แก้เป็น TINYINT(1)
+    created_by VARCHAR(50) NOT NULL,
     usage_limit INT DEFAULT NULL,
     used_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
