@@ -4,15 +4,26 @@
 // (1) ดึง sub-page จาก URL (ต้องรู้ section ก่อนตรวจสิทธิ์)
 $section = $_GET['section'] ?? 'dashboard';
 
-// (2) ตรวจสอบสิทธิ์: admin และ employee (จำลองจาก session)
-$isAdmin = (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'admin@temptation.com');
-$isEmployee = (
-    (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'employee@temptation.com') ||
-    (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
-);
+// (2) ตรวจสอบสิทธิ์: ใช้ทั้ง structure เก่าและใหม่ (ไม่กระทบ customer)
+$user = $_SESSION['user'] ?? null;
+$userRole = '';
 
-// ตรวจสอบว่าล็อกอินแล้วหรือยัง
-if (!isset($_SESSION['user_email'])) {
+// ตรวจสอบจาก structure ใหม่ก่อน (จาก login.php)
+if ($user && isset($user['role'])) {
+    $userRole = $user['role'];
+} 
+// fallback ไป structure เก่า (สำหรับ customer ที่ใช้งานอยู่)
+else if (isset($_SESSION['user_role'])) {
+    $userRole = $_SESSION['user_role'];
+}
+
+$isAdmin = in_array(strtoupper($userRole), ['ADMIN', 'OWNER']);
+$isEmployee = $isAdmin || in_array(strtoupper($userRole), ['EMPLOYEE', 'STAFF']);
+
+// ตรวจสอบว่าล็อกอินแล้วหรือยัง (ใช้ทั้ง structure เก่าและใหม่)
+$isLoggedIn = isset($_SESSION['user']) || isset($_SESSION['user_email']);
+
+if (!$isLoggedIn) {
     $_SESSION['flash_message'] = [
         'type' => 'error',
         'message' => 'กรุณาเข้าสู่ระบบก่อน'
@@ -57,10 +68,6 @@ $adminPages = [
     'customers' => 'pages/admin/sections/CustomersManagement.php',
     'reports' => 'pages/admin/sections/ReportsPage.php',
     'discounts' => 'pages/admin/sections/DiscountManagement.php',
-    // 'employee-management' => 'pages/admin/sections/EmployeeManagement.php',
-    // 'payment-verification' => 'pages/admin/sections/PaymentVerification.php',
-    // 'kyc-verification' => 'pages/admin/sections/CustomerKYC.php',
-    // 'owner-dashboard' => 'pages/admin/sections/OwnerDashboard.php',
 ];
 
 // (4) ตรวจสอบว่า section มีอยู่หรือไม่
@@ -80,7 +87,19 @@ if (array_key_exists($section, $adminPages)) {
         <!-- Admin Header -->
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">จัดการระบบ</h1>
-            <p class="text-gray-600 mt-2">ยินดีต้อนรับ <?php echo htmlspecialchars($_SESSION['user_email']); ?></p>
+            <p class="text-gray-600 mt-2">
+                ยินดีต้อนรับ 
+                <?php 
+                // แสดงชื่อจาก structure ใหม่หรือเก่า
+                if (isset($_SESSION['user']['firstName'])) {
+                    echo htmlspecialchars($_SESSION['user']['firstName'] . ' ' . ($_SESSION['user']['lastName'] ?? ''));
+                } else if (isset($_SESSION['user_name'])) {
+                    echo htmlspecialchars($_SESSION['user_name']);
+                } else if (isset($_SESSION['user_email'])) {
+                    echo htmlspecialchars($_SESSION['user_email']);
+                }
+                ?>
+            </p>
         </div>
 
         <!-- Admin Navigation Tabs -->

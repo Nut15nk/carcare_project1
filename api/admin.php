@@ -1,289 +1,675 @@
 <?php
-/**
- * Admin API
- * Handles admin-related API calls (statistics, reports, management)
- */
+// api/admin.php
+require_once 'config.php';
 
-require_once __DIR__ . '/config.php';
-
-class AdminAPI {
+class AdminService {
     
     /**
-     * Get dashboard statistics
+     * Get dashboard statistics from Spring Boot API - FIXED
      */
     public static function getDashboardStats() {
-        $stats = [
-            'total_bookings' => 0,
-            'active_bookings' => 0,
-            'total_customers' => 0,
-            'total_revenue' => 0,
-            'motorcycles_available' => 0,
-            'motorcycles_total' => 0
-        ];
-        
-        // Count bookings
-        if (isset($_SESSION['mock_bookings'])) {
-            $stats['total_bookings'] = count($_SESSION['mock_bookings']);
-            
-            foreach ($_SESSION['mock_bookings'] as $booking) {
-                if ($booking['status'] === 'active') {
-                    $stats['active_bookings']++;
-                }
-                $stats['total_revenue'] += $booking['totalPrice'];
-            }
-        }
-        
-        return [
-            'success' => true,
-            'data' => $stats
-        ];
-    }
-    
-    /**
-     * Get booking reports with filters
-     */
-    public static function getBookingReport($filters = []) {
-        $bookings = [];
-        
-        if (isset($_SESSION['mock_bookings'])) {
-            $bookings = $_SESSION['mock_bookings'];
-            
-            // Apply status filter
-            if (isset($filters['status'])) {
-                $bookings = array_filter($bookings, function($b) use ($filters) {
-                    return $b['status'] === $filters['status'];
-                });
+        try {
+            // ตรวจสอบ session และ token
+            if (!isset($_SESSION['user']['token'])) {
+                error_log("No token in session for getDashboardStats");
+                return self::getFallbackStats();
             }
             
-            // Apply date range filter
-            if (isset($filters['start_date']) && isset($filters['end_date'])) {
-                $startDate = strtotime($filters['start_date']);
-                $endDate = strtotime($filters['end_date']);
-                
-                $bookings = array_filter($bookings, function($b) use ($startDate, $endDate) {
-                    $bookingDate = strtotime($b['createdAt']);
-                    return $bookingDate >= $startDate && $bookingDate <= $endDate;
-                });
+            $token = $_SESSION['user']['token'];
+            
+            // ส่ง token เป็น parameter ที่ 4 แทน headers
+            $response = ApiConfig::makeApiCall('/admin/dashboard/stats', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
             }
             
-            // Apply motorcycle filter
-            if (isset($filters['motorcycleId'])) {
-                $bookings = array_filter($bookings, function($b) use ($filters) {
-                    return $b['motorcycleId'] === $filters['motorcycleId'];
-                });
-            }
+            error_log("Dashboard stats API failed with status: " . $response['status']);
+            return self::getFallbackStats();
+            
+        } catch (Exception $e) {
+            error_log("AdminService getDashboardStats Error: " . $e->getMessage());
+            return self::getFallbackStats();
         }
-        
-        // Calculate summary
-        $totalRevenue = 0;
-        $totalDiscount = 0;
-        foreach ($bookings as $booking) {
-            $totalRevenue += $booking['totalPrice'];
-            $totalDiscount += $booking['discount'];
-        }
-        
-        return [
-            'success' => true,
-            'data' => array_values($bookings),
-            'summary' => [
-                'count' => count($bookings),
-                'total_revenue' => $totalRevenue,
-                'total_discount' => $totalDiscount,
-                'average_price' => count($bookings) > 0 ? $totalRevenue / count($bookings) : 0
-            ]
-        ];
     }
     
     /**
-     * Get revenue report
+     * Get all reservations from Spring Boot API - FIXED
      */
-    public static function getRevenueReport($groupBy = 'day') {
-        $revenue = [];
-        
-        if (isset($_SESSION['mock_bookings'])) {
-            foreach ($_SESSION['mock_bookings'] as $booking) {
-                $date = date('Y-m-d', strtotime($booking['createdAt']));
-                
-                if (!isset($revenue[$date])) {
-                    $revenue[$date] = [
-                        'date' => $date,
-                        'total' => 0,
-                        'count' => 0,
-                        'discount' => 0
-                    ];
-                }
-                
-                $revenue[$date]['total'] += $booking['totalPrice'];
-                $revenue[$date]['count']++;
-                $revenue[$date]['discount'] += $booking['discount'];
+    public static function getAllReservations() {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                error_log("No token in session for getAllReservations");
+                return [];
             }
+            
+            $token = $_SESSION['user']['token'];
+            
+            // ใช้ endpoint ที่ถูกต้องและส่ง token เป็น parameter
+            $response = ApiConfig::makeApiCall('/admin/bookings', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            
+            error_log("Reservations API failed with status: " . $response['status']);
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getAllReservations Error: " . $e->getMessage());
+            return [];
         }
-        
-        return [
-            'success' => true,
-            'data' => $revenue,
-            'total_revenue' => array_sum(array_column($revenue, 'total'))
-        ];
     }
     
     /**
-     * Get motorcycle performance
+     * Get all customers from Spring Boot API - FIXED
      */
-    public static function getMotorcyclePerformance() {
-        $performance = [];
-        
-        if (isset($_SESSION['mock_bookings'])) {
-            foreach ($_SESSION['mock_bookings'] as $booking) {
-                $motoId = $booking['motorcycleId'];
-                
-                if (!isset($performance[$motoId])) {
-                    $performance[$motoId] = [
-                        'motorcycleId' => $motoId,
-                        'motorcycleName' => $booking['motorcycleName'],
-                        'total_bookings' => 0,
-                        'total_revenue' => 0,
-                        'total_days_booked' => 0
-                    ];
-                }
-                
-                $performance[$motoId]['total_bookings']++;
-                $performance[$motoId]['total_revenue'] += $booking['totalPrice'];
-                $performance[$motoId]['total_days_booked'] += $booking['totalDays'];
+    public static function getAllCustomers() {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
             }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/customers', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getAllCustomers Error: " . $e->getMessage());
+            return [];
         }
-        
-        // Sort by revenue
-        usort($performance, function($a, $b) {
-            return $b['total_revenue'] - $a['total_revenue'];
-        });
-        
-        return [
-            'success' => true,
-            'data' => $performance
-        ];
     }
     
     /**
-     * Get customer statistics
+     * Get all employees from Spring Boot API - FIXED
      */
-    public static function getCustomerStats() {
-        $customers = [];
-        
-        if (isset($_SESSION['mock_bookings'])) {
-            foreach ($_SESSION['mock_bookings'] as $booking) {
-                $email = $booking['userEmail'];
-                
-                if (!isset($customers[$email])) {
-                    $customers[$email] = [
-                        'email' => $email,
-                        'name' => $booking['userName'],
-                        'total_bookings' => 0,
-                        'total_spent' => 0,
-                        'last_booking' => null
-                    ];
-                }
-                
-                $customers[$email]['total_bookings']++;
-                $customers[$email]['total_spent'] += $booking['totalPrice'];
-                
-                $bookingDate = strtotime($booking['createdAt']);
-                $lastDate = $customers[$email]['last_booking'] ? strtotime($customers[$email]['last_booking']) : 0;
-                
-                if ($bookingDate > $lastDate) {
-                    $customers[$email]['last_booking'] = $booking['createdAt'];
-                }
+    public static function getAllEmployees() {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
             }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/employees', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getAllEmployees Error: " . $e->getMessage());
+            return [];
         }
-        
-        return [
-            'success' => true,
-            'data' => array_values($customers),
-            'total_customers' => count($customers)
-        ];
     }
     
     /**
-     * Get monthly summary
+     * Update reservation status - FIXED
      */
-    public static function getMonthlySummary($year = null, $month = null) {
-        if ($year === null) $year = date('Y');
-        if ($month === null) $month = date('m');
-        
-        $summary = [
-            'year' => $year,
-            'month' => $month,
-            'total_bookings' => 0,
-            'total_revenue' => 0,
-            'total_discount' => 0,
-            'new_customers' => 0
-        ];
-        
-        if (isset($_SESSION['mock_bookings'])) {
-            foreach ($_SESSION['mock_bookings'] as $booking) {
-                $bookingYear = date('Y', strtotime($booking['createdAt']));
-                $bookingMonth = date('m', strtotime($booking['createdAt']));
-                
-                if ($bookingYear == $year && $bookingMonth == $month) {
-                    $summary['total_bookings']++;
-                    $summary['total_revenue'] += $booking['totalPrice'];
-                    $summary['total_discount'] += $booking['discount'];
-                }
+    public static function updateReservationStatus($reservationId, $status) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
             }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/reservations/{$reservationId}/status?status={$status}", 
+                'PUT', 
+                null, 
+                $token
+            );
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateReservationStatus Error: " . $e->getMessage());
+            return false;
         }
-        
-        return [
-            'success' => true,
-            'data' => $summary
-        ];
     }
-}
+    
+    /**
+     * Get revenue report - FIXED
+     */
+    public static function getRevenueReport($period = 'monthly') {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/dashboard/revenue-report?period={$period}", 
+                'GET', 
+                null, 
+                $token
+            );
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getRevenueReport Error: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Get recent activities - FIXED
+     */
+    public static function getRecentActivities($limit = 10) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/dashboard/recent-activities?limit={$limit}", 
+                'GET', 
+                null, 
+                $token
+            );
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getRecentActivities Error: " . $e->getMessage());
+            return [];
+        }
+    }
 
-// Handle API requests
-if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    if (isset($_GET['action'])) {
-        switch ($_GET['action']) {
-            case 'getDashboardStats':
-                $result = AdminAPI::getDashboardStats();
-                jsonResponse($result);
-                break;
-                
-            case 'getBookingReport':
-                $filters = [];
-                if (isset($_GET['status'])) $filters['status'] = $_GET['status'];
-                if (isset($_GET['start_date'])) $filters['start_date'] = $_GET['start_date'];
-                if (isset($_GET['end_date'])) $filters['end_date'] = $_GET['end_date'];
-                if (isset($_GET['motorcycleId'])) $filters['motorcycleId'] = $_GET['motorcycleId'];
-                
-                $result = AdminAPI::getBookingReport($filters);
-                jsonResponse($result);
-                break;
-                
-            case 'getRevenueReport':
-                $groupBy = $_GET['groupBy'] ?? 'day';
-                $result = AdminAPI::getRevenueReport($groupBy);
-                jsonResponse($result);
-                break;
-                
-            case 'getMotorcyclePerformance':
-                $result = AdminAPI::getMotorcyclePerformance();
-                jsonResponse($result);
-                break;
-                
-            case 'getCustomerStats':
-                $result = AdminAPI::getCustomerStats();
-                jsonResponse($result);
-                break;
-                
-            case 'getMonthlySummary':
-                $year = $_GET['year'] ?? null;
-                $month = $_GET['month'] ?? null;
-                $result = AdminAPI::getMonthlySummary($year, $month);
-                jsonResponse($result);
-                break;
-                
-            default:
-                jsonResponse(['success' => false, 'error' => 'Unknown action'], 404);
+    // ===== ฟังก์ชันใหม่ที่เพิ่ม =====
+
+    /**
+     * Create new employee - FIXED
+     */
+    public static function createEmployee($employeeData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/employees', 'POST', $employeeData, $token);
+            
+            return $response['status'] === 201 || $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService createEmployee Error: " . $e->getMessage());
+            return false;
         }
+    }
+    
+    /**
+     * Update employee - FIXED
+     */
+    public static function updateEmployee($employeeId, $employeeData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/employees/{$employeeId}", 'PUT', $employeeData, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateEmployee Error: " . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Delete employee - FIXED
+     */
+    public static function deleteEmployee($employeeId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/employees/{$employeeId}", 'DELETE', null, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService deleteEmployee Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update payment status - FIXED
+     */
+    public static function updatePaymentStatus($reservationId, $status) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/payments/{$reservationId}/status?status={$status}", 
+                'PUT', 
+                null, 
+                $token
+            );
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updatePaymentStatus Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get all motorcycles for admin - FIXED
+     */
+    public static function getAllMotorcycles() {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/motorcycles', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getAllMotorcycles Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Create new motorcycle - FIXED
+     */
+    public static function createMotorcycle($motorcycleData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/motorcycles', 'POST', $motorcycleData, $token);
+            
+            return $response['status'] === 201 || $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService createMotorcycle Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update motorcycle - FIXED
+     */
+    public static function updateMotorcycle($motorcycleId, $motorcycleData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'PUT', $motorcycleData, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateMotorcycle Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Delete motorcycle - FIXED
+     */
+    public static function deleteMotorcycle($motorcycleId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'DELETE', null, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService deleteMotorcycle Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get all discounts - FIXED
+     */
+    public static function getAllDiscounts() {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/discounts', 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getAllDiscounts Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Create new discount - FIXED
+     */
+    public static function createDiscount($discountData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall('/admin/discounts', 'POST', $discountData, $token);
+            
+            return $response['status'] === 201 || $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService createDiscount Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Update discount - FIXED
+     */
+    public static function updateDiscount($discountId, $discountData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'PUT', $discountData, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateDiscount Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Delete discount - FIXED
+     */
+    public static function deleteDiscount($discountId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'DELETE', null, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService deleteDiscount Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get payment details - FIXED
+     */
+    public static function getPaymentDetails($reservationId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/payments/{$reservationId}", 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getPaymentDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get customer details - FIXED
+     */
+    public static function getCustomerDetails($customerId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/customers/{$customerId}", 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getCustomerDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Update customer status - FIXED
+     */
+    public static function updateCustomerStatus($customerId, $status) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/customers/{$customerId}/status?status={$status}", 
+                'PUT', 
+                null, 
+                $token
+            );
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateCustomerStatus Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get reservation details - FIXED
+     */
+    public static function getReservationDetails($reservationId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/reservations/{$reservationId}", 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getReservationDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get motorcycle details - FIXED
+     */
+    public static function getMotorcycleDetails($motorcycleId) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'GET', null, $token);
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getMotorcycleDetails Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Update motorcycle status - FIXED
+     */
+    public static function updateMotorcycleStatus($motorcycleId, $statusData) {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return false;
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}/status", 'PUT', $statusData, $token);
+            
+            return $response['status'] === 200;
+            
+        } catch (Exception $e) {
+            error_log("AdminService updateMotorcycleStatus Error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Get system analytics - FIXED
+     */
+    public static function getSystemAnalytics($period = 'monthly') {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/dashboard/analytics?period={$period}", 
+                'GET', 
+                null, 
+                $token
+            );
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService getSystemAnalytics Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Export reports - FIXED
+     */
+    public static function exportReports($reportType, $format = 'csv') {
+        try {
+            if (!isset($_SESSION['user']['token'])) {
+                return [];
+            }
+            
+            $token = $_SESSION['user']['token'];
+            
+            $response = ApiConfig::makeApiCall(
+                "/admin/reports/export?type={$reportType}&format={$format}", 
+                'GET', 
+                null, 
+                $token
+            );
+            
+            if ($response['status'] === 200 && isset($response['data']['data'])) {
+                return $response['data']['data'];
+            }
+            return [];
+            
+        } catch (Exception $e) {
+            error_log("AdminService exportReports Error: " . $e->getMessage());
+            return [];
+        }
+    }
+    
+    /**
+     * Fallback stats when API fails
+     */
+    private static function getFallbackStats() {
+        return [
+            'totalBookings' => 0,
+            'pendingBookings' => 0,
+            'activeBookings' => 0,
+            'totalRevenue' => 0,
+            'availableMotorcycles' => 0
+        ];
     }
 }
 ?>

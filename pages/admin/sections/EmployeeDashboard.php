@@ -1,196 +1,216 @@
 <?php
 // pages/admin/sections/EmployeesPage.php
-// (ไฟล์นี้จะถูก include โดย AdminRouter.php)
+// จัดการพนักงาน - ใช้ข้อมูลจริงจาก API
+
+require_once 'api/admin.php';
 
 $error = '';
 $success = '';
 
-// (1) เริ่มต้นฐานข้อมูลจำลอง (ถ้ายังไม่มี)
-if (!isset($_SESSION['employees'])) {
-    $_SESSION['employees'] = [
-        // เราจะใช้ email เป็น key
-        'admin@temptation.com' => [
-            'name' => $_SESSION['user_name'] ?? 'Admin', // ดึงจาก session ที่ล็อกอิน
-            'email' => $_SESSION['user_email'] ?? 'admin@temptation.com',
-            'phone' => '0801234567',
-            'role' => 'admin',
-            'password_hash' => password_hash('admin123', PASSWORD_DEFAULT) // เข้ารหัสผ่าน
-        ],
-        'employee@temptation.com' => [
-            'name' => 'Employee One',
-            'email' => 'employee@temptation.com',
-            'phone' => '0809876543',
-            'role' => 'employee',
-            'password_hash' => password_hash('emp123', PASSWORD_DEFAULT)
-        ]
-    ];
-}
-
-// (2) Controller: จัดการ Actions (POST = Create/Update, GET = Delete)
-
-// (2A) CREATE / UPDATE (เมื่อฟอร์มถูกส่ง)
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+// Handle form actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
-    $name = $_POST['name'] ?? '';
-    $email = $_POST['email'] ?? '';
-    $phone = $_POST['phone'] ?? '';
-    $role = $_POST['role'] ?? 'employee';
-    $password = $_POST['password'] ?? '';
-
-    if (empty($name) || empty($email) || empty($phone)) {
-        $error = 'กรุณากรอกชื่อ, อีเมล, และเบอร์โทร';
-    } else {
-        if ($action === 'add') {
-            // --- CREATE ---
-            if (isset($_SESSION['employees'][$email])) {
-                $error = 'อีเมลนี้ถูกใช้แล้ว';
-            } elseif (empty($password)) {
-                $error = 'กรุณากรอกรหัสผ่านสำหรับพนักงานใหม่';
-            } else {
-                $_SESSION['employees'][$email] = [
-                    'name' => $name,
-                    'email' => $email,
-                    'phone' => $phone,
-                    'role' => $role,
-                    'password_hash' => password_hash($password, PASSWORD_DEFAULT)
-                ];
-                $success = 'เพิ่มพนักงานใหม่สำเร็จ!';
-            }
-        } elseif ($action === 'update') {
-            // --- UPDATE ---
-            if (!isset($_SESSION['employees'][$email])) {
-                $error = 'ไม่พบพนักงานที่ต้องการอัปเดต';
-            } else {
-                $_SESSION['employees'][$email]['name'] = $name;
-                $_SESSION['employees'][$email]['phone'] = $phone;
-                $_SESSION['employees'][$email]['role'] = $role;
-                
-                // อัปเดตรหัสผ่าน (ถ้ากรอกใหม่)
-                if (!empty($password)) {
-                    $_SESSION['employees'][$email]['password_hash'] = password_hash($password, PASSWORD_DEFAULT);
-                }
-                $success = 'อัปเดตข้อมูลพนักงานสำเร็จ!';
-            }
-        }
-    }
-}
-
-// (2B) DELETE (เมื่อคลิกลิงก์)
-if (isset($_GET['action']) && $_GET['action'] === 'delete') {
-    $email = $_GET['email'] ?? '';
-    if (isset($_SESSION['employees'][$email])) {
-        // ป้องกันการลบตัวเอง (Admin ที่กำลังล็อกอิน)
-        if ($email === $_SESSION['user_email']) {
-            $error = 'คุณไม่สามารถลบตัวคุณเองได้';
+    
+    if ($action === 'add') {
+        // CREATE new employee
+        $employeeData = [
+            'email' => $_POST['email'],
+            'password' => $_POST['password'],
+            'firstName' => $_POST['first_name'],
+            'lastName' => $_POST['last_name'],
+            'phone' => $_POST['phone'],
+            'position' => $_POST['position'] ?? 'staff'
+        ];
+        
+        $success = AdminService::createEmployee($employeeData);
+        if ($success) {
+            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'เพิ่มพนักงานใหม่สำเร็จ'];
+            header('Location: index.php?page=admin&section=employees');
+            exit;
         } else {
-            unset($_SESSION['employees'][$email]);
-            $success = 'ลบพนักงานสำเร็จ!';
+            $error = 'ไม่สามารถเพิ่มพนักงานได้';
         }
-    } else {
-        $error = 'ไม่พบพนักงานที่ต้องการลบ';
+        
+    } elseif ($action === 'update' && isset($_POST['employee_id'])) {
+        // UPDATE employee
+        $employeeId = $_POST['employee_id'];
+        $employeeData = [
+            'firstName' => $_POST['first_name'],
+            'lastName' => $_POST['last_name'],
+            'phone' => $_POST['phone'],
+            'position' => $_POST['position'] ?? 'staff'
+        ];
+        
+        // Add password only if provided
+        if (!empty($_POST['password'])) {
+            $employeeData['password'] = $_POST['password'];
+        }
+        
+        $success = AdminService::updateEmployee($employeeId, $employeeData);
+        if ($success) {
+            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'อัปเดตข้อมูลพนักงานสำเร็จ'];
+            header('Location: index.php?page=admin&section=employees');
+            exit;
+        } else {
+            $error = 'ไม่สามารถอัปเดตข้อมูลพนักงานได้';
+        }
     }
 }
 
-// (3) Model: ดึงข้อมูลเพื่อแสดงผล (Read)
+// Handle DELETE action
+if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])) {
+    $employeeId = $_GET['id'];
+    
+    // Prevent self-deletion
+    $currentUserId = $_SESSION['user']['userId'] ?? $_SESSION['user']['id'] ?? '';
+    if ($employeeId === $currentUserId) {
+        $error = 'คุณไม่สามารถลบตัวคุณเองได้';
+    } else {
+        $success = AdminService::deleteEmployee($employeeId);
+        if ($success) {
+            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'ลบพนักงานสำเร็จ'];
+            header('Location: index.php?page=admin&section=employees');
+            exit;
+        } else {
+            $error = 'ไม่สามารถลบพนักงานได้';
+        }
+    }
+}
 
-// (3A) ดึงข้อมูลทั้งหมด
-$employees = $_SESSION['employees'];
+// ดึงข้อมูลพนักงานทั้งหมดจาก API
+$employees = AdminService::getAllEmployees();
 
-// (3B) เตรียมฟอร์มสำหรับ Edit (ถ้ามี)
+// เตรียมข้อมูลสำหรับฟอร์มแก้ไข
 $edit_mode = false;
 $edit_employee = [
-    'name' => '',
+    'employeeId' => '',
+    'firstName' => '',
+    'lastName' => '',
     'email' => '',
     'phone' => '',
-    'role' => 'employee'
+    'position' => 'staff'
 ];
 
-if (isset($_GET['action']) && $_GET['action'] === 'edit') {
-    $email = $_GET['email'] ?? '';
-    if (isset($employees[$email])) {
-        $edit_mode = true;
-        $edit_employee = $employees[$email];
-    } else {
+if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['id'])) {
+    $employeeId = $_GET['id'];
+    $edit_mode = true;
+    
+    // Find employee by ID
+    foreach ($employees as $emp) {
+        if ($emp['employeeId'] === $employeeId || $emp['id'] === $employeeId) {
+            $edit_employee = $emp;
+            break;
+        }
+    }
+    
+    if (!$edit_employee['employeeId'] && !$edit_employee['id']) {
         $error = 'ไม่พบพนักงานที่ต้องการแก้ไข';
+        $edit_mode = false;
     }
 }
 
+// ฟังก์ชันช่วยในการแสดงตำแหน่ง
+function getPositionBadge($position) {
+    $positionMap = [
+        'admin' => ['text' => 'ผู้ดูแลระบบ', 'class' => 'bg-purple-100 text-purple-800'],
+        'manager' => ['text' => 'ผู้จัดการ', 'class' => 'bg-blue-100 text-blue-800'],
+        'staff' => ['text' => 'พนักงาน', 'class' => 'bg-green-100 text-green-800'],
+        'owner' => ['text' => 'เจ้าของ', 'class' => 'bg-red-100 text-red-800']
+    ];
+    
+    $positionInfo = $positionMap[$position] ?? ['text' => $position, 'class' => 'bg-gray-100 text-gray-800'];
+    return '<span class="px-2 py-1 text-xs font-semibold rounded-full ' . $positionInfo['class'] . '">' . $positionInfo['text'] . '</span>';
+}
 ?>
 
-<!-- (4) View: เริ่ม HTML -->
 <div class="space-y-6">
     <h1 class="text-2xl font-bold text-gray-900">จัดการพนักงาน</h1>
 
-    <!-- (5) Flash Messages (แสดง Error หรือ Success) -->
+    <!-- Flash Messages -->
+    <?php if (isset($_SESSION['flash_message'])): ?>
+        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            <?php echo $_SESSION['flash_message']['message']; ?>
+        </div>
+        <?php unset($_SESSION['flash_message']); ?>
+    <?php endif; ?>
+
     <?php if (!empty($error)): ?>
         <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
             <?php echo $error; ?>
         </div>
     <?php endif; ?>
-    <?php if (!empty($success)): ?>
-        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-            <?php echo $success; ?>
-        </div>
-    <?php endif; ?>
 
-    <!-- (6) Form: CREATE / UPDATE -->
+    <!-- Form: CREATE / UPDATE -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-xl font-semibold mb-4">
             <?php echo $edit_mode ? 'แก้ไขข้อมูลพนักงาน' : 'เพิ่มพนักงานใหม่'; ?>
         </h2>
         
         <form method="POST" action="index.php?page=admin&section=employees" class="space-y-4">
-            
-            <!-- ซ่อน action และ email (สำหรับ update) -->
             <input type="hidden" name="action" value="<?php echo $edit_mode ? 'update' : 'add'; ?>">
-            <input type="hidden" name="email" value="<?php echo htmlspecialchars($edit_employee['email']); ?>">
+            
+            <?php if ($edit_mode): ?>
+                <input type="hidden" name="employee_id" value="<?php echo htmlspecialchars($edit_employee['employeeId'] ?? $edit_employee['id']); ?>">
+            <?php endif; ?>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล</label>
-                    <input type="text" id="name" name="name" 
-                           value="<?php echo htmlspecialchars($edit_employee['name']); ?>" 
-                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">ชื่อ</label>
+                    <input type="text" id="first_name" name="first_name" 
+                           value="<?php echo htmlspecialchars($edit_employee['firstName'] ?? $edit_employee['first_name'] ?? ''); ?>" 
+                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                 </div>
+                <div>
+                    <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">นามสกุล</label>
+                    <input type="text" id="last_name" name="last_name" 
+                           value="<?php echo htmlspecialchars($edit_employee['lastName'] ?? $edit_employee['last_name'] ?? ''); ?>"
+                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="email" class="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
                     <input type="email" id="email" name="email" 
-                           value="<?php echo htmlspecialchars($edit_employee['email']); ?>"
-                           <?php if ($edit_mode) echo 'readonly'; // ห้ามแก้ไข email (key) ?>
-                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg <?php if ($edit_mode) echo 'bg-gray-100 cursor-not-allowed'; ?>">
+                           value="<?php echo htmlspecialchars($edit_employee['email'] ?? ''); ?>"
+                           <?php if ($edit_mode) echo 'readonly'; ?>
+                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 <?php if ($edit_mode) echo 'bg-gray-100 cursor-not-allowed'; ?>">
+                </div>
+                <div>
+                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
+                    <input type="tel" id="phone" name="phone" 
+                           value="<?php echo htmlspecialchars($edit_employee['phone'] ?? ''); ?>" 
+                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
-                    <input type="tel" id="phone" name="phone" 
-                           value="<?php echo htmlspecialchars($edit_employee['phone']); ?>" 
-                           required class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                </div>
-                <div>
-                    <label for="role" class="block text-sm font-medium text-gray-700 mb-1">บทบาท</label>
-                    <select id="role" name="role" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                        <option value="employee" <?php if ($edit_employee['role'] === 'employee') echo 'selected'; ?>>Employee</option>
-                        <option value="admin" <?php if ($edit_employee['role'] === 'admin') echo 'selected'; ?>>Admin</option>
+                    <label for="position" class="block text-sm font-medium text-gray-700 mb-1">ตำแหน่ง</label>
+                    <select id="position" name="position" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="staff" <?php echo ($edit_employee['position'] ?? '') === 'staff' ? 'selected' : ''; ?>>พนักงาน</option>
+                        <option value="manager" <?php echo ($edit_employee['position'] ?? '') === 'manager' ? 'selected' : ''; ?>>ผู้จัดการ</option>
+                        <option value="admin" <?php echo ($edit_employee['position'] ?? '') === 'admin' ? 'selected' : ''; ?>>ผู้ดูแลระบบ</option>
                     </select>
                 </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
+                    <input type="password" id="password" name="password" 
+                           <?php if (!$edit_mode) echo 'required'; ?>
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                           placeholder="<?php echo $edit_mode ? '(เว้นว่างไว้หากไม่ต้องการเปลี่ยน)' : 'อย่างน้อย 6 ตัวอักษร'; ?>">
+                    <?php if (!$edit_mode): ?>
+                        <p class="text-xs text-gray-500 mt-1">รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร</p>
+                    <?php endif; ?>
+                </div>
             </div>
 
-            <div>
-                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-                <input type="password" id="password" name="password" 
-                       <?php if (!$edit_mode) echo 'required'; // บังคับกรอกถ้าเป็น "Add" ?>
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg" 
-                       placeholder="<?php echo $edit_mode ? '(เว้นว่างไว้หากไม่ต้องการเปลี่ยน)' : 'อย่างน้อย 6 ตัวอักษร'; ?>">
-            </div>
-
-            <div>
-                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
+            <div class="flex gap-2">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition">
                     <?php echo $edit_mode ? 'อัปเดตข้อมูล' : 'เพิ่มพนักงาน'; ?>
                 </button>
                 <?php if ($edit_mode): ?>
-                    <a href="index.php?page=admin&section=employees" class="ml-2 text-gray-600 hover:text-gray-800">
+                    <a href="index.php?page=admin&section=employees" class="bg-gray-300 hover:bg-gray-400 text-gray-900 px-6 py-2 rounded-lg font-medium text-center transition">
                         ยกเลิกการแก้ไข
                     </a>
                 <?php endif; ?>
@@ -198,50 +218,77 @@ if (isset($_GET['action']) && $_GET['action'] === 'edit') {
         </form>
     </div>
 
-    <!-- (7) Table: READ -->
-    <div class="bg-white rounded-lg shadow overflow-x-auto">
-        <h2 class="text-xl font-semibold p-6">รายชื่อพนักงานทั้งหมด (<?php echo count($employees); ?> คน)</h2>
-        <table class="w-full border-collapse">
-            <thead class="bg-gray-100">
-                <tr>
-                    <th class="border-b px-4 py-2 text-left">ชื่อ-นามสกุล</th>
-                    <th class="border-b px-4 py-2 text-left">อีเมล</th>
-                    <th class="border-b px-4 py-2 text-left">เบอร์โทร</th>
-                    <th class="border-b px-4 py-2 text-left">บทบาท</th>
-                    <th class="border-b px-4 py-2 text-left">จัดการ</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($employees as $email => $emp): ?>
-                    <tr class="hover:bg-gray-50">
-                        <td class="border-b px-4 py-2"><?php echo htmlspecialchars($emp['name']); ?></td>
-                        <td class="border-b px-4 py-2"><?php echo htmlspecialchars($emp['email']); ?></td>
-                        <td class="border-b px-4 py-2"><?php echo htmlspecialchars($emp['phone']); ?></td>
-                        <td class="border-b px-4 py-2">
-                            <?php if ($emp['role'] === 'admin'): ?>
-                                <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded">Admin</span>
-                            <?php else: ?>
-                                <span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">Employee</span>
-                            <?php endif; ?>
-                        </td>
-                        <td class="border-b px-4 py-2">
-                            <a href="index.php?page=admin&section=employees&action=edit&email=<?php echo urlencode($email); ?>" 
-                               class="text-blue-600 hover:text-blue-800 text-sm font-medium mr-2">
-                                <i data-lucide="edit-2" class="inline h-4 w-4"></i> แก้ไข
-                            </a>
-                            
-                            <?php // ห้ามแสดงปุ่มลบ ถ้าเป็นตัวเอง ?>
-                            <?php if ($email !== $_SESSION['user_email']): ?>
-                                <a href="index.php?page=admin&section=employees&action=delete&email=<?php echo urlencode($email); ?>" 
-                                   class="text-red-600 hover:text-red-800 text-sm font-medium"
-                                   onclick="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบ <?php echo htmlspecialchars($emp['name']); ?> ?')">
-                                    <i data-lucide="trash-2" class="inline h-4 w-4"></i> ลบ
-                                </a>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+    <!-- Table: Employee List -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-xl font-semibold">รายชื่อพนักงานทั้งหมด (<?php echo count($employees); ?> คน)</h2>
+        </div>
+        
+        <?php if (empty($employees)): ?>
+            <div class="p-6 text-center text-gray-500">
+                <p>ยังไม่มีข้อมูลพนักงาน</p>
+            </div>
+        <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">อีเมล</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เบอร์โทร</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ตำแหน่ง</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php foreach ($employees as $employee): ?>
+                            <?php
+                            $employeeId = $employee['employeeId'] ?? $employee['id'];
+                            $fullName = ($employee['firstName'] ?? $employee['first_name'] ?? '') . ' ' . ($employee['lastName'] ?? $employee['last_name'] ?? '');
+                            $isCurrentUser = $employeeId === ($_SESSION['user']['userId'] ?? $_SESSION['user']['id'] ?? '');
+                            ?>
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="font-medium text-gray-900"><?php echo htmlspecialchars(trim($fullName)); ?></div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($employee['email']); ?>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    <?php echo htmlspecialchars($employee['phone'] ?? 'ไม่ระบุ'); ?>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <?php echo getPositionBadge($employee['position'] ?? 'staff'); ?>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full <?php echo ($employee['isActive'] ?? true) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'; ?>">
+                                        <?php echo ($employee['isActive'] ?? true) ? 'ใช้งาน' : 'ปิดใช้งาน'; ?>
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="index.php?page=admin&section=employees&action=edit&id=<?php echo urlencode($employeeId); ?>" 
+                                       class="text-blue-600 hover:text-blue-900 mr-3">
+                                        <i data-lucide="edit-2" class="inline h-4 w-4"></i> แก้ไข
+                                    </a>
+                                    
+                                    <?php if (!$isCurrentUser): ?>
+                                        <a href="index.php?page=admin&section=employees&action=delete&id=<?php echo urlencode($employeeId); ?>" 
+                                           class="text-red-600 hover:text-red-900"
+                                           onclick="return confirm('คุณแน่ใจหรือไม่ว่าต้องการลบ <?php echo htmlspecialchars(trim($fullName)); ?> ?')">
+                                            <i data-lucide="trash-2" class="inline h-4 w-4"></i> ลบ
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-gray-400 cursor-not-allowed">
+                                            <i data-lucide="trash-2" class="inline h-4 w-4"></i> ลบ
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 </div>

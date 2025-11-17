@@ -1,5 +1,6 @@
 <?php
-// api/config.php (เวอร์ชันใหม่)
+// api/config.php
+session_start(); // เพิ่มบรรทัดนี้สำคัญ!
 
 // โหลด autoload จาก vendor ที่ติดตั้งผ่าน Composer
 require_once __DIR__ . '/../vendor/autoload.php';
@@ -13,7 +14,10 @@ class ApiConfig {
     public static function makeApiCall($url, $method = 'GET', $data = null, $token = null, $customHeaders = []) {
         $fullUrl = self::BASE_URL . $url;
         
-        // ใช้ Guzzle เป็นหลัก (ตอนนี้ใช้งานได้แล้ว)
+        // DEBUG: Log request
+        error_log("API Call: $method $fullUrl");
+        error_log("Token: " . ($token ? 'YES' : 'NO'));
+        
         return self::makeGuzzleCall($fullUrl, $method, $data, $token, $customHeaders);
     }
     
@@ -21,7 +25,8 @@ class ApiConfig {
         try {
             $client = new Client([
                 'timeout' => 30,
-                'http_errors' => false // ไม่ throw exception สำหรับ HTTP errors
+                'http_errors' => false,
+                'verify' => false // เพิ่มนี้ถ้ามีปัญหา SSL
             ]);
             
             $options = [
@@ -31,6 +36,7 @@ class ApiConfig {
                 ], $customHeaders)
             ];
             
+            // แก้ไข: รับ token เป็น parameter โดยตรง
             if ($token) {
                 $options['headers']['Authorization'] = 'Bearer ' . $token;
             }
@@ -41,12 +47,18 @@ class ApiConfig {
             
             $response = $client->request($method, $fullUrl, $options);
             
-            return [
+            $responseData = [
                 'status' => $response->getStatusCode(),
                 'data' => json_decode($response->getBody(), true),
                 'method' => 'guzzle',
                 'success' => $response->getStatusCode() >= 200 && $response->getStatusCode() < 300
             ];
+            
+            // DEBUG: Log response
+            error_log("API Response: " . $response->getStatusCode());
+            error_log("API Response Data: " . json_encode($responseData['data']));
+            
+            return $responseData;
             
         } catch (Exception $e) {
             // Fallback to file_get_contents ถ้า Guzzle error
@@ -142,3 +154,4 @@ if (isset($_GET['test'])) {
     ], JSON_PRETTY_PRINT);
     exit;
 }
+?>

@@ -1,72 +1,126 @@
 <?php
 // pages/admin/sections/PaymentsPage.php
-// (ไฟล์นี้จะถูก include โดย AdminRouter.php)
+// จัดการชำระเงิน - ใช้ข้อมูลจริงจาก API
 
+require_once 'api/admin.php';
+
+// ดึงข้อมูลการจองทั้งหมดเพื่อแสดงข้อมูลการชำระเงิน
+$bookings = AdminService::getAllReservations();
+
+// กรองเฉพาะการจองที่มีข้อมูลการชำระเงิน
 $payments = [];
-$error = '';
-
-try {
-    // (1) ดึงข้อมูลจาก API (เหมือน fetch() ใน React)
-    // (ใน PHP เราใช้ file_get_contents แทน)
-    $apiUrl = "http://localhost/project-api/get_payments.php";
-    
-    // ตั้งค่า timeout เผื่อ API ช้า
-    $context = stream_context_create(['http' => ['timeout' => 5]]);
-    $json_data = @file_get_contents($apiUrl, false, $context);
-    
-    if ($json_data === false) {
-        throw new Exception("ไม่สามารถเชื่อมต่อ API ได้ ($apiUrl)");
+foreach ($bookings as $booking) {
+    if (isset($booking['paymentStatus']) || isset($booking['payment'])) {
+        $payments[] = $booking;
     }
-
-    $payments = json_decode($json_data, true);
-    
-    if (json_last_error() !== JSON_ERROR_NONE) {
-        throw new Exception("ข้อมูลที่ได้รับจาก API ไม่ใช่ JSON");
-    }
-
-} catch (Exception $e) {
-    $error = $e->getMessage();
 }
 
+// Handle payment status update
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['booking_id'])) {
+    $action = $_POST['action'];
+    $bookingId = $_POST['booking_id'];
+    
+    if ($action === 'confirm_payment') {
+        $success = AdminService::updatePaymentStatus($bookingId, 'paid');
+        if ($success) {
+            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'ยืนยันการชำระเงินสำเร็จ'];
+        } else {
+            $_SESSION['flash_message'] = ['type' => 'error', 'message' => 'ไม่สามารถยืนยันการชำระเงินได้'];
+        }
+    }
+    
+    header('Location: index.php?page=admin&section=payments');
+    exit;
+}
+
+// ฟังก์ชันช่วยในการแสดงสถานะการชำระเงิน
+function getPaymentStatusBadge($status) {
+    $statusMap = [
+        'pending' => ['text' => 'รอชำระเงิน', 'class' => 'bg-yellow-100 text-yellow-800'],
+        'paid' => ['text' => 'ชำระเงินแล้ว', 'class' => 'bg-green-100 text-green-800'],
+        'failed' => ['text' => 'ชำระเงินไม่สำเร็จ', 'class' => 'bg-red-100 text-red-800'],
+        'refunded' => ['text' => 'คืนเงินแล้ว', 'class' => 'bg-blue-100 text-blue-800']
+    ];
+    
+    $statusInfo = $statusMap[$status] ?? ['text' => $status, 'class' => 'bg-gray-100 text-gray-800'];
+    return '<span class="px-2 py-1 text-xs font-semibold rounded-full ' . $statusInfo['class'] . '">' . $statusInfo['text'] . '</span>';
+}
 ?>
 
-<!-- (2) เริ่ม HTML ของ "การชำระเงิน" -->
-<div class="p-0"> <!-- p-6 ถูกควบคุมโดย AdminRouter แล้ว -->
-    <h2 class="text-2xl font-bold mb-4 text-gray-900">จัดการการชำระเงิน</h2>
+<div>
+    <h2 class="text-xl font-semibold mb-4">จัดการชำระเงิน</h2>
+    <p class="text-sm text-gray-600 mb-4">ตรวจสอบและยืนยันสถานะการชำระเงิน</p>
 
-    <?php if (!empty($error)): ?>
-        <!-- (3) แสดง Error ถ้า API ล้มเหลว -->
-        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <strong>เกิดข้อผิดพลาด:</strong> <?php echo htmlspecialchars($error); ?>
-        </div>
-    <?php elseif (empty($payments)): ?>
-        <!-- (4) แสดงผลถ้าไม่มีข้อมูล -->
-        <div class="bg-white p-6 rounded-lg shadow text-center text-gray-500">
-            ไม่พบข้อมูลการชำระเงิน
+    <?php if (empty($payments)): ?>
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p class="text-yellow-800">ไม่พบข้อมูลการชำระเงิน</p>
         </div>
     <?php else: ?>
-        <!-- (5) แสดงตาราง (เหมือนใน React) -->
-        <div class="bg-white rounded-lg shadow overflow-x-auto">
-            <table class="w-full border-collapse">
-                <thead class="bg-gray-100">
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
                     <tr>
-                        <th class="border-b px-4 py-2 text-left">Booking ID</th>
-                        <th class="border-b px-4 py-2 text-left">Customer ID</th>
-                        <th class="border-b px-4 py-2 text-left">Amount</th>
-                        <th class="border-b px-4 py-2 text-left">Date</th>
-                        <th class="border-b px-4 py-2 text-left">Method</th>
-                        <th class="border-b px-4 py-2 text-left">Status</th>
+                        <th class="px-4 py-3">รหัสการจอง</th>
+                        <th class="px-4 py-3">ลูกค้า</th>
+                        <th class="px-4 py-3">ยอดชำระ</th>
+                        <th class="px-4 py-3">วันที่ชำระ</th>
+                        <th class="px-4 py-3">ช่องทาง</th>
+                        <th class="px-4 py-3">สถานะ</th>
+                        <th class="px-4 py-3">การทำงาน</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($payments as $p): ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['booking_id']); ?></td>
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['customer_id']); ?></td>
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['amount']); ?></td>
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['payment_date']); ?></td>
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['method']); ?></td>
-                            <td class="border-b px-4 py-2"><?php echo htmlspecialchars($p['status']); ?></td>
+                    <?php foreach($payments as $payment): ?>
+                        <tr class="border-t hover:bg-gray-50">
+                            <td class="px-4 py-3 font-mono text-sm">
+                                <?php echo htmlspecialchars($payment['reservationId'] ?? $payment['id']); ?>
+                            </td>
+                            <td class="px-4 py-3">
+                                <?php 
+                                $customerName = '';
+                                if (isset($payment['customerName'])) {
+                                    $customerName = $payment['customerName'];
+                                } else if (isset($payment['customer']['firstName'])) {
+                                    $customerName = $payment['customer']['firstName'] . ' ' . ($payment['customer']['lastName'] ?? '');
+                                }
+                                echo htmlspecialchars($customerName ?: 'ไม่ระบุชื่อ');
+                                ?>
+                            </td>
+                            <td class="px-4 py-3 font-semibold">
+                                ฿<?php echo number_format($payment['totalAmount'] ?? $payment['amount'] ?? 0, 2); ?>
+                            </td>
+                            <td class="px-4 py-3 text-sm">
+                                <?php 
+                                $paymentDate = $payment['paymentDate'] ?? $payment['createdAt'] ?? '';
+                                echo $paymentDate ? date('d/m/Y H:i', strtotime($paymentDate)) : 'รอชำระเงิน';
+                                ?>
+                            </td>
+                            <td class="px-4 py-3">
+                                <?php 
+                                $paymentMethod = $payment['paymentMethod'] ?? $payment['payment_method'] ?? 'ไม่ระบุ';
+                                echo htmlspecialchars($paymentMethod);
+                                ?>
+                            </td>
+                            <td class="px-4 py-3">
+                                <?php 
+                                $paymentStatus = $payment['paymentStatus'] ?? $payment['payment_status'] ?? 'pending';
+                                echo getPaymentStatusBadge($paymentStatus);
+                                ?>
+                            </td>
+                            <td class="px-4 py-3">
+                                <?php if ($paymentStatus === 'pending'): ?>
+                                    <form method="post" style="display:inline-block;">
+                                        <input type="hidden" name="booking_id" value="<?php echo htmlspecialchars($payment['reservationId'] ?? $payment['id']); ?>">
+                                        <button name="action" value="confirm_payment" 
+                                                class="px-3 py-1 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition"
+                                                onclick="return confirm('ยืนยันการชำระเงิน #<?php echo $payment['reservationId'] ?? $payment['id']; ?>?')">
+                                            ยืนยันชำระเงิน
+                                        </button>
+                                    </form>
+                                <?php else: ?>
+                                    <span class="text-sm text-gray-500">ดำเนินการแล้ว</span>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>

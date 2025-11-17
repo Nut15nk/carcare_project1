@@ -1,159 +1,70 @@
 <?php
-// (0) จำลองข้อมูลรถ (ดึงมาจาก BookingPages.php)
-$motorcycles_data = [
-    [
-        'id' => '1',
-        'brand' => 'Honda',
-        'model' => 'Wave 110i',
-        'cc' => 110,
-        'type' => 'Automatic',
-        'pricePerDay' => 250,
-        'image' => 'https://imgcdn.zigwheels.co.th/large/gallery/exterior/90/3251/honda-wave110i-2016-marketing/image-510506.jpg',
-        'status' => 'available',
-        'features' => ['ประหยัดน้ำมัน', 'ขับขี่ง่าย', 'เหมาะกับเมือง'],
-        'bookings' => []
-    ],
-    [
-        'id' => '2',
-        'brand' => 'Honda',
-        'model' => 'Click 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 300,
-        'image' => 'https://n9.cl/5vw6d4',
-        'features' => ['สปอร์ต', 'ออโตเมติก', 'ประหยัดน้ำมัน'],
-        'status' => 'available',
-        'bookings' => []
-    ],
-    [
-        'id' => '3',
-        'brand' => 'Honda',
-        'model' => 'PCX 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 400,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/926/photos/shares/0125/Bike/Gallery-W926xH518_PX_Styling_01.jpg',
-        'features' => ['หรูหรา', 'สะดวกสบาย', 'เทคโนโลยีทันสมัย'],
-        'status' => 'available',
-        'bookings' => []
-    ],
-    [
-        'id' => '4',
-        'brand' => 'Yamaha',
-        'model' => 'NMAX',
-        'cc' => 155,
-        'type' => 'Automatic',
-        'pricePerDay' => 450,
-        'image' => 'https://n9.cl/5vw6d4',
-        'status' => 'available',
-        'features' => ['สปอร์ต', 'ประสิทธิภาพสูง', 'ดีไซน์ทันสมัย'],
-        'bookings' => []
-    ],
-    [
-        'id' => '5',
-        'brand' => 'Honda',
-        'model' => 'Giorno',
-        'cc' => 125,
-        'type' => 'Manual',
-        'pricePerDay' => 500,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/685/photos/shares/giorno/AW_GIORNO__Online_Color_Section_W685xH426px_2.png',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'สำหรับผู้เชี่ยวชาญ'],
-        'bookings' => []
-    ],
-    [
-        'id' => '6',
-        'brand' => 'Kawasaki',
-        'model' => 'Ninja 400',
-        'cc' => 400,
-        'type' => 'Manual',
-        'pricePerDay' => 800,
-        'image' => 'https://austinracingthailand.com/wp-content/uploads/2023/08/KA196.1.18-.jpeg',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'เครื่องยนต์ทรงพลัง'],
-        'bookings' => []
-    ]
+// pages/admin/sections/AdminDashboard.php
+session_start(); // ต้องมีบรรทัดนี้สำคัญ!
+
+// DEBUG: ตรวจสอบ Session
+error_log("=== DASHBOARD DEBUG ===");
+error_log("Session User: " . (isset($_SESSION['user']) ? 'EXISTS' : 'NOT EXISTS'));
+error_log("User Role: " . ($_SESSION['user']['role'] ?? 'NO ROLE'));
+error_log("Token: " . (isset($_SESSION['user']['token']) ? 'EXISTS' : 'NOT EXISTS'));
+
+// โหลด AdminService
+$adminServicePaths = [
+    __DIR__ . '/../../../api/admin.php',
+    __DIR__ . '/../../api/admin.php', 
+    'api/admin.php'
 ];
 
-// (1) จำลองข้อมูล Bookings
-$allBookings = [
-    [
-        'id' => 1,
-        'motorcycleId' => '1',
-        'startDate' => date('Y-m-d', strtotime('-5 days')),
-        'endDate' => date('Y-m-d', strtotime('-3 days')),
-        'totalPrice' => 500,
-        'status' => 'completed',
-        'paymentStatus' => 'paid',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-5 days'))
-    ],
-    [
-        'id' => 2,
-        'motorcycleId' => '2',
-        'startDate' => date('Y-m-d', strtotime('-2 days')),
-        'endDate' => date('Y-m-d', strtotime('+3 days')),
-        'totalPrice' => 1200,
-        'status' => 'active',
-        'paymentStatus' => 'paid',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-2 days'))
-    ],
-    [
-        'id' => 3,
-        'motorcycleId' => '3',
-        'startDate' => date('Y-m-d', strtotime('+1 day')),
-        'endDate' => date('Y-m-d', strtotime('+5 days')),
-        'totalPrice' => 1600,
-        'status' => 'pending',
-        'paymentStatus' => 'pending',
-        'createdAt' => date('Y-m-d H:i:s')
-    ],
-    [
-        'id' => 4,
-        'motorcycleId' => '4',
-        'startDate' => date('Y-m-d', strtotime('+2 days')),
-        'endDate' => date('Y-m-d', strtotime('+6 days')),
-        'totalPrice' => 2250,
-        'status' => 'pending',
-        'paymentStatus' => 'pending',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-1 day'))
-    ],
-    [
-        'id' => 5,
-        'motorcycleId' => '5',
-        'startDate' => date('Y-m-d', strtotime('-10 days')),
-        'endDate' => date('Y-m-d', strtotime('-7 days')),
-        'totalPrice' => 1500,
-        'status' => 'completed',
-        'paymentStatus' => 'paid',
-        'createdAt' => date('Y-m-d H:i:s', strtotime('-10 days'))
-    ],
-];
+$adminServiceLoaded = false;
+foreach ($adminServicePaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $adminServiceLoaded = true;
+        break;
+    }
+}
 
-// (2) คำนวณ Stats (เหมือนใน React)
-$totalBookings = count($allBookings);
-$pendingBookings = count(array_filter($allBookings, fn($b) => $b['status'] === 'pending'));
-$activeBookings = count(array_filter($allBookings, fn($b) => $b['status'] === 'active'));
-$totalRevenue = array_reduce(
-    array_filter($allBookings, fn($b) => $b['paymentStatus'] === 'paid'),
-    fn($sum, $b) => $sum + $b['totalPrice'],
-    0
-);
-$availableMotorcycles = count(array_filter($motorcycles_data, fn($m) => $m['status'] === 'available'));
+if (!$adminServiceLoaded) {
+    die("ไม่พบไฟล์ AdminService");
+}
 
-// (2) สร้างอาร์เรย์ Stats
-$stats = [
-    ['label' => 'การจองทั้งหมด', 'value' => $totalBookings, 'icon' => 'calendar', 'color' => 'bg-blue-500'],
-    ['label' => 'รอการยืนยัน', 'value' => $pendingBookings, 'icon' => 'clock', 'color' => 'bg-yellow-500'], // ใช้ clock ธรรมดา
-    ['label' => 'กำลังเช่า', 'value' => $activeBookings, 'icon' => 'trending-up', 'color' => 'bg-green-500'],
-    ['label' => 'รายได้รวม', 'value' => '฿' . number_format($totalRevenue, 0), 'icon' => 'credit-card', 'color' => 'bg-purple-500'],
-    ['label' => 'รถว่าง', 'value' => $availableMotorcycles, 'icon' => 'bike', 'color' => 'bg-indigo-500'],
-];
-
-// (4) เรียงลำดับการจองล่าสุด (สำหรับตาราง)
-$recentBookings = $allBookings;
-usort($recentBookings, fn($a, $b) => strtotime($b['createdAt']) - strtotime($a['createdAt']));
-$recentBookings = array_slice($recentBookings, 0, 5); // เอา 5 รายการล่าสุด
-
+// ใช้ API จริงแทน Mock Data
+try {
+    // ดึงข้อมูลจาก API
+    $statsData = AdminService::getDashboardStats();
+    $allReservations = AdminService::getAllReservations();
+    
+    // DEBUG: ดูข้อมูลที่ได้จาก API
+    error_log("Stats Data: " . json_encode($statsData));
+    error_log("Reservations Count: " . count($allReservations));
+    
+    // สร้าง stats จากข้อมูลจริง
+    $stats = [
+        ['label' => 'การจองทั้งหมด', 'value' => $statsData['totalBookings'] ?? 0, 'icon' => 'calendar', 'color' => 'bg-blue-500'],
+        ['label' => 'รอการยืนยัน', 'value' => $statsData['pendingBookings'] ?? 0, 'icon' => 'clock', 'color' => 'bg-yellow-500'],
+        ['label' => 'กำลังเช่า', 'value' => $statsData['activeBookings'] ?? 0, 'icon' => 'trending-up', 'color' => 'bg-green-500'],
+        ['label' => 'รายได้รวม', 'value' => '฿' . number_format($statsData['totalRevenue'] ?? 0, 0), 'icon' => 'credit-card', 'color' => 'bg-purple-500'],
+        ['label' => 'รถว่าง', 'value' => $statsData['availableMotorcycles'] ?? 0, 'icon' => 'bike', 'color' => 'bg-indigo-500'],
+    ];
+    
+    // ใช้การจองล่าสุดจาก API (5 รายการแรก)
+    $recentBookings = array_slice($allReservations, 0, 5);
+    
+} catch (Exception $e) {
+    // ถ้า API error ใช้ mock data fallback (ไม่กระทบการแสดงผล)
+    error_log("Dashboard API Error: " . $e->getMessage());
+    
+    // Fallback mock data
+    $recentBookings = [];
+    
+    $stats = [
+        ['label' => 'การจองทั้งหมด', 'value' => 0, 'icon' => 'calendar', 'color' => 'bg-blue-500'],
+        ['label' => 'รอการยืนยัน', 'value' => 0, 'icon' => 'clock', 'color' => 'bg-yellow-500'],
+        ['label' => 'กำลังเช่า', 'value' => 0, 'icon' => 'trending-up', 'color' => 'bg-green-500'],
+        ['label' => 'รายได้รวม', 'value' => '฿0', 'icon' => 'credit-card', 'color' => 'bg-purple-500'],
+        ['label' => 'รถว่าง', 'value' => 0, 'icon' => 'bike', 'color' => 'bg-indigo-500'],
+    ];
+}
 ?>
 
 <!-- (5) เริ่ม HTML ของ "ภาพรวม" -->
@@ -191,40 +102,49 @@ $recentBookings = array_slice($recentBookings, 0, 5); // เอา 5 ราย�
             <?php else: ?>
                 <?php foreach ($recentBookings as $booking): ?>
                     <?php
-                    // ค้นหารถ (เหมือน .find())
-                    $motorcycle = null;
-                    foreach ($motorcycles_data as $m) {
-                        if ($m['id'] == $booking['motorcycleId']) {
-                            $motorcycle = $m;
-                            break;
-                        }
-                    }
-
                     // กำหนดสีสถานะ
-                    $statusText = $booking['status'];
+                    $statusText = $booking['status'] ?? 'pending';
                     $statusColor = 'bg-gray-100 text-gray-800';
-                    if ($booking['status'] === 'pending') {
+                    if ($statusText === 'pending') {
                         $statusText = 'รอยืนยัน';
                         $statusColor = 'bg-yellow-100 text-yellow-800';
-                    } elseif ($booking['status'] === 'confirmed') {
+                    } elseif ($statusText === 'confirmed') {
                         $statusText = 'ยืนยันแล้ว';
                         $statusColor = 'bg-blue-100 text-blue-800';
-                    } elseif ($booking['status'] === 'active') {
+                    } elseif ($statusText === 'active') {
                         $statusText = 'กำลังเช่า';
                         $statusColor = 'bg-green-100 text-green-800';
+                    } elseif ($statusText === 'completed') {
+                        $statusText = 'เสร็จสิ้น';
+                        $statusColor = 'bg-gray-100 text-gray-800';
+                    } elseif ($statusText === 'cancelled') {
+                        $statusText = 'ยกเลิก';
+                        $statusColor = 'bg-red-100 text-red-800';
                     }
                     ?>
                     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
                         <div>
                             <p class="font-medium text-gray-900">
-                                <?php echo $motorcycle ? ($motorcycle['brand'] . ' ' . $motorcycle['model']) : 'ไม่พบข้อมูลรถ'; ?>
+                                <?php 
+                                if (isset($booking['motorcycle']['brand']) && isset($booking['motorcycle']['model'])) {
+                                    echo htmlspecialchars($booking['motorcycle']['brand'] . ' ' . $booking['motorcycle']['model']);
+                                } else if (isset($booking['motorcycleId'])) {
+                                    echo htmlspecialchars('รถรหัส: ' . $booking['motorcycleId']);
+                                } else {
+                                    echo 'ไม่พบข้อมูลรถ';
+                                }
+                                ?>
                             </p>
                             <p class="text-sm text-gray-600">
-                                <?php echo date('d/m/Y', strtotime($booking['startDate'])); ?> - <?php echo date('d/m/Y', strtotime($booking['endDate'])); ?>
+                                <?php 
+                                $startDate = $booking['startDate'] ?? date('Y-m-d');
+                                $endDate = $booking['endDate'] ?? date('Y-m-d', strtotime('+1 day'));
+                                echo date('d/m/Y', strtotime($startDate)) . ' - ' . date('d/m/Y', strtotime($endDate)); 
+                                ?>
                             </p>
                         </div>
                         <div class="text-right">
-                            <p class="font-medium text-gray-900">฿<?php echo number_format($booking['totalPrice'], 0); ?></p>
+                            <p class="font-medium text-gray-900">฿<?php echo number_format($booking['totalPrice'] ?? 0, 0); ?></p>
                             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full <?php echo $statusColor; ?>">
                                 <?php echo $statusText; ?>
                             </span>
@@ -235,3 +155,10 @@ $recentBookings = array_slice($recentBookings, 0, 5); // เอา 5 ราย�
         </div>
     </div>
 </div>
+
+<!-- DEBUG: แสดงข้อมูล session สำหรับตรวจสอบ -->
+<script>
+console.log('Dashboard Debug:');
+console.log('Stats Data:', <?php echo json_encode($statsData); ?>);
+console.log('Recent Bookings:', <?php echo json_encode($recentBookings); ?>);
+</script>
