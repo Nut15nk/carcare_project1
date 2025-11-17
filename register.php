@@ -1,4 +1,9 @@
 <?php
+// เพิ่ม error reporting ที่ด้านบนสุด
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+
 // pages/RegisterPage.php (Standalone page like login.php)
 session_start(); // start session for standalone page
 
@@ -32,31 +37,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (strlen($password) < 6) {
         $error = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     } else {
-        // โหลดไฟล์ API
-        require_once '../api/config.php';
-        require_once '../api/auth.php';
-
-        // ใช้ API จริงแทน mock data
-        $userData = [
-            'email' => $email,
-            'password' => $password,
-            'confirmPassword' => $confirmPassword,
-            'firstName' => explode(' ', $name)[0] ?? $name,
-            'lastName' => explode(' ', $name)[1] ?? '',
-            'phone' => $phone,
-            'address' => $lineId ? "Line ID: {$lineId}" : '',
-            'licenseNumber' => 'PENDING', // ต้องอัพเดททีหลัง
-            'idCardNumber' => 'PENDING' // ต้องอัพเดททีหลัง
-        ];
+        // โหลดไฟล์ API ด้วย path ที่ถูกต้อง
+        $configFile = __DIR__ . '/api/config.php';
+        $authFile = __DIR__ . '/api/auth.php';
         
-        $user = AuthService::register($userData);
+        error_log("Looking for config.php at: " . $configFile);
+        error_log("Looking for auth.php at: " . $authFile);
         
-        if ($user) {
-            $_SESSION['user'] = $user;
-            header('Location: index.php');
-            exit;
+        if (!file_exists($configFile)) {
+            $error = 'ไม่พบไฟล์ config.php กรุณาติดต่อผู้ดูแล';
+            error_log("ERROR: config.php not found at: " . $configFile);
+        } elseif (!file_exists($authFile)) {
+            $error = 'ไม่พบไฟล์ auth.php กรุณาติดต่อผู้ดูแล';
+            error_log("ERROR: auth.php not found at: " . $authFile);
         } else {
-            $error = 'การสมัครสมาชิกล้มเหลว หรืออีเมลนี้มีผู้ใช้แล้ว';
+            try {
+                require_once $configFile;
+                require_once $authFile;
+                
+                error_log("✅ Files loaded successfully");
+                
+                // ใช้ API จริงแทน mock data
+                $userData = [
+                    'email' => $email,
+                    'password' => $password,
+                    'confirmPassword' => $confirmPassword,
+                    'firstName' => explode(' ', $name)[0] ?? $name,
+                    'lastName' => explode(' ', $name)[1] ?? '',
+                    'phone' => $phone,
+                    'address' => $lineId ? "Line ID: {$lineId}" : '',
+                    'licenseNumber' => 'PENDING', // ต้องอัพเดททีหลัง
+                    'idCardNumber' => 'PENDING' // ต้องอัพเดททีหลัง
+                ];
+                
+                error_log("Attempting register with data: " . print_r($userData, true));
+                
+                $user = AuthService::register($userData);
+                
+                if ($user) {
+                    error_log("✅ Register successful, user data: " . print_r($user, true));
+                    $_SESSION['user'] = $user;
+                    header('Location: index.php');
+                    exit;
+                } else {
+                    $error = 'การสมัครสมาชิกล้มเหลว หรืออีเมลนี้มีผู้ใช้แล้ว';
+                    error_log("❌ Register failed");
+                }
+            } catch (Exception $e) {
+                $error = 'เกิดข้อผิดพลาดในระบบ: ' . $e->getMessage();
+                error_log("EXCEPTION: " . $e->getMessage());
+            }
         }
     }
 }
@@ -87,7 +117,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <form class="space-y-6" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
               <?php if (!empty($error)): ?>
                   <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                      <?php echo $error; ?>
+                      <div class="flex items-center">
+                          <i data-lucide="alert-circle" class="h-5 w-5 mr-2"></i>
+                          <?php echo $error; ?>
+                      </div>
                   </div>
               <?php endif; ?>
 
@@ -160,7 +193,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
 
               <div>
-                  <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">สมัครสมาชิก</button>
+                  <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200">
+                      <i data-lucide="user-plus" class="h-4 w-4 mr-2"></i>
+                      สมัครสมาชิก
+                  </button>
               </div>
           </form>
 
@@ -176,7 +212,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
               <div class="mt-6 text-center">
                   <p class="text-sm text-gray-600">มีบัญชีอยู่แล้ว?
-                      <a href="login.php" class="font-medium text-blue-600 hover:text-blue-500">เข้าสู่ระบบ</a>
+                      <a href="login.php" class="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200">
+                          <i data-lucide="log-in" class="h-4 w-4 inline mr-1"></i>
+                          เข้าสู่ระบบ
+                      </a>
                   </p>
               </div>
           </div>
@@ -214,6 +253,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               passwordInput2.setAttribute('type', type);
               eyeIcon2.classList.toggle('hidden');
               eyeOffIcon2.classList.toggle('hidden');
+          });
+      }
+
+      // Form validation
+      const form = document.querySelector('form');
+      if (form) {
+          form.addEventListener('submit', function(e) {
+              const password = document.getElementById('password').value;
+              const confirmPassword = document.getElementById('confirmPassword').value;
+              
+              if (password.length < 6) {
+                  e.preventDefault();
+                  alert('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+                  return false;
+              }
+              
+              if (password !== confirmPassword) {
+                  e.preventDefault();
+                  alert('รหัสผ่านไม่ตรงกัน');
+                  return false;
+              }
           });
       }
   });

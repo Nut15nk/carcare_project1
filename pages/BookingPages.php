@@ -1,275 +1,211 @@
 <?php
-// pages/BookingPage.php
-// ไม่ต้อง session_start() เพราะ index.php เรียกไปแล้ว
+// pages/BookingPages.php
+session_start();
 
-// --- (1) ฐานข้อมูลจำลอง (Mock Database) ---
-$motorcycles_data = [
-    [
-        'id' => '1',
-        'brand' => 'Honda',
-        'model' => 'Wave 110i',
-        'cc' => 110,
-        'type' => 'Automatic',
-        'pricePerDay' => 250,
-        'image' => 'https://imgcdn.zigwheels.co.th/large/gallery/exterior/90/3251/honda-wave110i-2016-marketing-image-510506.jpg',
-        'status' => 'available',
-        'features' => ['ประหยัดน้ำมัน', 'ขับขี่ง่าย', 'เหมาะกับเมือง'],
-    ],
-    [
-        'id' => '2',
-        'brand' => 'Honda',
-        'model' => 'Click 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 300,
-        'image' => 'https://n9.cl/5vw6d4',
-        'features' => ['สปอร์ต', 'ออโตเมติก', 'ประหยัดน้ำมัน'],
-        'status' => 'available',
-    ],
-    [
-        'id' => '3',
-        'brand' => 'Honda',
-        'model' => 'PCX 160',
-        'cc' => 160,
-        'type' => 'Automatic',
-        'pricePerDay' => 400,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/926/photos/shares/0125/Bike-Gallery-W926xH518_PX_Styling_01.jpg',
-        'features' => ['หรูหรา', 'สะดวกสบาย', 'เทคโนโลยีทันสมัย'],
-        'status' => 'available',
-    ],
-    [
-        'id' => '4',
-        'brand' => 'Yamaha',
-        'model' => 'NMAX',
-        'cc' => 155,
-        'type' => 'Automatic',
-        'pricePerDay' => 450,
-        'image' => 'https://n9.cl/5vw6d4',
-        'status' => 'available',
-        'features' => ['สปอร์ต', 'ประสิทธิภาพสูง', 'ดีไซน์ทันสมัย'],
-    ],
-    [
-        'id' => '5',
-        'brand' => 'Honda',
-        'model' => 'Giorno',
-        'cc' => 125,
-        'type' => 'Manual',
-        'pricePerDay' => 500,
-        'image' => 'https://www.thaihonda.co.th/honda/uploads/cache/685/photos/shares/giorno/AW_GIORNO__Online_Color_Section_W685xH426px_2.png',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'สำหรับผู้เชี่ยวชาญ'],
-    ],
-    [
-        'id' => '6',
-        'brand' => 'Kawasaki',
-        'model' => 'Ninja 400',
-        'cc' => 400,
-        'type' => 'Manual',
-        'pricePerDay' => 800,
-        'image' => 'https://austinracingthailand.com/wp-content/uploads/2023/08/KA196.1.18-.jpeg',
-        'status' => 'available',
-        'features' => ['สปอร์ตไบค์', 'ประสิทธิภาพสูง', 'เครื่องยนต์ทรงพลัง'],
-    ]
-];
-
-// --- (2) ฟังก์ชัน Helpers ---
-/**
- * คำนวณส่วนลด (ลด 50 บาท ทุกๆ 3 วัน)
- */
-function calculateDiscount($days, $pricePerDay)
-{
-    $normalPrice = $days * $pricePerDay;
-    $discount = 0;
-    if ($days >= 3) {
-        $discount = floor($days / 3) * 50;
-    }
-    return [
-        'normalPrice' => $normalPrice,
-        'finalPrice' => $normalPrice - $discount, // ราคาก่อนหักคูปอง
-        'discount' => $discount // ส่วนลดอัตโนมัติ
+// ตรวจสอบการล็อกอิน - แก้เป็นใช้ $_SESSION['user']
+if (!isset($_SESSION['user'])) {
+    $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
+    $_SESSION['flash_message'] = [
+        'type' => 'error',
+        'message' => 'กรุณาเข้าสู่ระบบก่อนทำการจอง'
     ];
+    header("Location: login.php");
+    exit;
 }
 
-// --- (3) ดึง ID และ ค้นหารถ ---
-$motorcycle_id = $_GET['id'] ?? null;
-$motorcycle = null;
-if ($motorcycle_id) {
-    foreach ($motorcycles_data as $m) {
-        if ($m['id'] == $motorcycle_id) {
-            $motorcycle = $m;
-            break;
-        }
-    }
-}
-
-// (4) กำหนดตัวแปร (เหมือน useState)
 $error = '';
 $today = date('Y-m-d');
 
-// (5) Initialize bookings & discounts
-if (!isset($_SESSION['mock_bookings'])) {
-    $_SESSION['mock_bookings'] = [];
+// โหลดไฟล์ API
+$configPaths = [
+    __DIR__ . '/../api/config.php',
+    __DIR__ . '/../../api/config.php',
+    'api/config.php'
+];
+
+$configLoaded = false;
+foreach ($configPaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $configLoaded = true;
+        break;
+    }
 }
+
+if (!$configLoaded) {
+    die('ไม่พบไฟล์ config.php');
+}
+
+// โหลด motorcycles.php
+$motorcyclePaths = [
+    __DIR__ . '/../api/motorcycles.php',
+    __DIR__ . '/../../api/motorcycles.php',
+    'api/motorcycles.php'
+];
+
+$motorcycleLoaded = false;
+foreach ($motorcyclePaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $motorcycleLoaded = true;
+        break;
+    }
+}
+
+if (!$motorcycleLoaded) {
+    die('ไม่พบไฟล์ motorcycles.php');
+}
+
+// โหลด bookings.php
+$bookingPaths = [
+    __DIR__ . '/../api/bookings.php',
+    __DIR__ . '/../../api/bookings.php',
+    'api/bookings.php'  
+];
+
+$bookingLoaded = false;
+foreach ($bookingPaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $bookingLoaded = true;
+        break;
+    }
+}
+
+if (!$bookingLoaded) {
+    die('ไม่พบไฟล์ bookings.php');
+}
+
+// ดึงข้อมูลรถ
+$motorcycle_id = $_GET['id'] ?? null;
+$motorcycle = null;
+
+if ($motorcycle_id) {
+    try {
+        $motorcycle = MotorcycleService::getMotorcycleById($motorcycle_id);
+        if (!$motorcycle) {
+            $error = 'ไม่พบข้อมูลรถจักรยานยนต์';
+        }
+    } catch (Exception $e) {
+        $error = 'ไม่สามารถโหลดข้อมูลรถได้: ' . $e->getMessage();
+    }
+} else {
+    $error = 'ไม่พบรหัสรถ';
+}
+
+// กำหนดค่าเริ่มต้นสำหรับส่วนลด
 if (!isset($_SESSION['discounts'])) {
-    $_SESSION['discounts'] = [];
+    $_SESSION['discounts'] = [
+        [
+            'code' => 'WELCOME50',
+            'type' => 'fixed',
+            'value' => 50,
+            'min_days' => 1,
+            'max_discount' => null,
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-12-31',
+            'usage_limit' => 100,
+            'used_count' => 0,
+            'is_active' => true
+        ],
+        [
+            'code' => 'WEEKEND10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_days' => 2,
+            'max_discount' => 200,
+            'start_date' => '2024-01-01',
+            'end_date' => '2024-12-31',
+            'usage_limit' => 50,
+            'used_count' => 0,
+            'is_active' => true
+        ]
+    ];
 }
 $all_discounts = $_SESSION['discounts'];
 
-
-// (6) ประมวลผลฟอร์ม (POST Request)
+// ประมวลผลฟอร์มจอง
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-
-    // (A) ดึงข้อมูลจากฟอร์ม
     $startDate = $_POST['start_date'] ?? '';
     $endDate = $_POST['end_date'] ?? '';
+    $pickupLocation = $_POST['pickup_location'] ?? ''; // ✅ เพิ่ม
     $returnLocation = $_POST['return_location'] ?? 'ร้านเทมป์เทชัน';
     $discount_code_input = strtoupper(trim($_POST['discount_code'] ?? ''));
 
-    // (B) ดึงข้อมูลผู้ใช้จาก Session
-    $userEmail = $_SESSION['user_email'] ?? 'guest@example.com';
-    $userName = $_SESSION['user_name'] ?? 'Guest User';
-
-    // (C) ตรวจสอบข้อมูล
-    if (empty($startDate) || empty($endDate) || !$motorcycle) {
+    if (empty($startDate) || empty($endDate) || empty($pickupLocation) || !$motorcycle) {
         $error = 'กรุณากรอกข้อมูลให้ครบถ้วน';
     } else {
-
-        // (D) คำนวณวันและส่วนลดอัตโนมัติ
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
         $diff = $end->diff($start);
         $totalDays = $diff->days;
-        
+
         if ($totalDays <= 0) {
             $error = 'วันที่คืนรถต้องอยู่หลังวันที่รับรถ';
-        }
+        } else {
+            try {
+                // สร้างข้อมูลการจอง
+                $bookingData = [
+                    'motorcycleId' => $motorcycle['motorcycleId'],
+                    'startDate' => $startDate,
+                    'endDate' => $endDate,
+                    'pickupLocation' => $pickupLocation, // ✅ เพิ่ม
+                    'returnLocation' => $returnLocation
+                ];
 
-        $priceData = calculateDiscount($totalDays, $motorcycle['pricePerDay']);
-        $price_after_auto_discount = $priceData['finalPrice'];
-        $auto_discount = $priceData['discount'];
-        
-        $specialOffers = '';
-        if ($auto_discount > 0) {
-            $specialOffers = "ส่วนลด {$auto_discount} บาท (เช่า {$totalDays} วัน)";
-        }
-        
-        // (E) ตรวจสอบโค้ดส่วนลด (Server-side Validation)
-        $coupon_discount = 0;
-        $applied_discount_code = null;
-
-        if (!empty($discount_code_input) && empty($error)) {
-            $found_code = null;
-            foreach ($all_discounts as $code) {
-                if ($code['code'] === $discount_code_input) {
-                    $found_code = $code;
-                    break;
-                }
-            }
-            
-            if (!$found_code) {
-                $error = 'โค้ดส่วนลดไม่ถูกต้อง';
-            } else {
-                $now = time();
-                $is_active = $found_code['is_active'];
-                $is_valid_date = (strtotime($found_code['start_date']) <= $now && $now <= strtotime($found_code['end_date']));
-                $is_under_limit = !$found_code['usage_limit'] || ($found_code['used_count'] < $found_code['usage_limit']);
-                $meets_min_days = ($totalDays >= $found_code['min_days']);
-
-                if (!$is_active || !$is_valid_date || !$is_under_limit) {
-                    $error = 'โค้ดส่วนลดนี้ไม่สามารถใช้งานได้ในขณะนี้';
-                } elseif (!$meets_min_days) {
-                    $error = 'ต้องเช่าอย่างน้อย ' . $found_code['min_days'] . ' วันเพื่อใช้โค้ดนี้';
-                } else {
-                    // โค้ดถูกต้อง, คำนวณส่วนลด
-                    if ($found_code['type'] === 'fixed') {
-                        $coupon_discount = $found_code['value'];
-                    } elseif ($found_code['type'] === 'percentage') {
-                        $coupon_discount = $price_after_auto_discount * ($found_code['value'] / 100);
-                        if ($found_code['max_discount'] && $coupon_discount > $found_code['max_discount']) {
-                            $coupon_discount = $found_code['max_discount'];
+                // เพิ่มโค้ดส่วนลดถ้ามี
+                if (!empty($discount_code_input)) {
+                    $found_code = null;
+                    foreach ($all_discounts as $code) {
+                        if ($code['code'] === $discount_code_input && $code['is_active']) {
+                            $found_code = $code;
+                            break;
                         }
                     }
-                    $applied_discount_code = $found_code['code'];
-                }
-            }
-        }
-        
-        // (F) คำนวณราคาสุดท้าย
-        $totalPrice = $price_after_auto_discount - $coupon_discount;
+                    
+                    if ($found_code) {
+                        $now = time();
+                        $is_valid_date = (strtotime($found_code['start_date']) <= $now && $now <= strtotime($found_code['end_date']));
+                        $is_under_limit = !$found_code['usage_limit'] || ($found_code['used_count'] < $found_code['usage_limit']);
+                        $meets_min_days = ($totalDays >= $found_code['min_days']);
 
-        // (G) จัดการไฟล์อัพโหลด (Payment Proof)
-        $paymentProofPath = null;
-        if (empty($error)) { // ตรวจสอบไฟล์ต่อเมื่อไม่มี error อื่น
-            if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] == UPLOAD_ERR_OK) {
-                $paymentProofPath = basename($_FILES['payment_proof']['name']); // จำลอง (ไม่ได้ย้ายไฟล์จริง)
-            } else {
-                $error = 'กรุณาอัพโหลดหลักฐานการโอนเงิน';
-            }
-        }
-
-        // (H) บันทึกการจอง (ถ้าไม่มี Error)
-        if (empty($error)) {
-            
-            // อัปเดตการใช้โค้ด (ถ้ามี)
-            if ($applied_discount_code) {
-                foreach ($_SESSION['discounts'] as &$d) { // ใช้ reference (&)
-                    if ($d['code'] === $applied_discount_code) {
-                        $d['used_count']++;
-                        break;
+                        if ($is_valid_date && $is_under_limit && $meets_min_days) {
+                            $bookingData['discountCode'] = $discount_code_input;
+                            
+                            foreach ($_SESSION['discounts'] as &$d) {
+                                if ($d['code'] === $discount_code_input) {
+                                    $d['used_count']++;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
+
+                // สร้างการจองผ่าน API
+                $booking = BookingService::createBooking($bookingData);
+                
+                if ($booking) {
+                    $_SESSION['flash_message'] = [
+                        'type' => 'success',
+                        'message' => 'จองสำเร็จ! เราจะติดต่อกลับภายใน 24 ชั่วโมง'
+                    ];
+                    header("Location: index.php?page=profile");
+                    exit;
+                } else {
+                    $error = 'ไม่สามารถทำการจองได้ กรุณาลองใหม่';
+                }
+            } catch (Exception $e) {
+                $error = 'เกิดข้อผิดพลาดในการจอง: ' . $e->getMessage();
             }
-
-            // บันทึกการจอง
-            $bookingId = 'BK' . time();
-            $booking = [
-                'id' => $bookingId,
-                'motorcycleId' => $motorcycle['id'],
-                'motorcycleName' => $motorcycle['brand'] . ' ' . $motorcycle['model'],
-                'userEmail' => $userEmail,
-                'userName' => $userName,
-                'startDate' => $startDate,
-                'endDate' => $endDate,
-                'totalDays' => $totalDays,
-                'pricePerDay' => $motorcycle['pricePerDay'],
-                'totalPrice' => $totalPrice,
-                'discount' => $auto_discount, // ส่วนลดอัตโนมัติ
-                'coupon_code' => $applied_discount_code,
-                'coupon_discount' => $coupon_discount,
-                'returnLocation' => $returnLocation,
-                'paymentProof' => $paymentProofPath,
-                'status' => 'confirmed', 
-                'createdAt' => date('Y-m-d H:i:s'),
-                'specialOffers' => $specialOffers // ข้อความส่วนลดอัตโนมัติ
-            ];
-
-            $_SESSION['mock_bookings'][] = $booking;
-
-            // Redirect
-            $_SESSION['booking_success'] = 'สำเร็จ! การจองของคุณได้รับการยืนยัน';
-            header('Location: index.php?page=profile');
-            exit;
         }
     }
 }
-
-// (7) Get user's bookings from session
-$userBookings = [];
-if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
-    foreach ($_SESSION['mock_bookings'] as $booking) {
-        if (isset($booking['userEmail']) && $booking['userEmail'] === $_SESSION['user_email']) {
-            $userBookings[] = $booking;
-        }
-    }
-}
-
 ?>
 
-<!-- (8) เริ่มส่วน HTML (View) -->
 <div class="min-h-screen bg-gray-50">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
-        <!-- (9) แสดงผลหากไม่พบรถ -->
         <?php if (!$motorcycle): ?>
             <div class="min-h-[60vh] flex items-center justify-center">
                 <div class="text-center">
@@ -281,7 +217,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 </div>
             </div>
 
-        <!-- (10) แสดงผลหากพบรถ -->
         <?php else: ?>
 
             <!-- Back Button -->
@@ -294,12 +229,13 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 <!-- Motorcycle Details -->
                 <div class="bg-white rounded-lg shadow-lg overflow-hidden">
                     <div class="relative h-64">
-                        <img src="<?php echo htmlspecialchars($motorcycle['image']); ?>"
+                        <img src="<?php echo htmlspecialchars($motorcycle['imageUrl'] ?? '../img/default-bike.jpg'); ?>"
                             alt="<?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>"
-                            class="w-full h-full object-cover" />
+                            class="w-full h-full object-cover" 
+                            onerror="this.src='../img/default-bike.jpg'"/>
                         <div class="absolute top-4 right-4">
                             <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                                พร้อมใช้งาน
+                                <?php echo ($motorcycle['isAvailable'] ?? false) ? 'พร้อมใช้งาน' : 'ไม่ว่าง'; ?>
                             </span>
                         </div>
                     </div>
@@ -316,28 +252,29 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                         <div class="flex items-center gap-6 text-gray-600 mb-6">
                             <div class="flex items-center gap-2">
                                 <i data-lucide="fuel" class="h-5 w-5"></i>
-                                <span><?php echo $motorcycle['cc']; ?>cc</span>
+                                <span><?php echo $motorcycle['engineCc'] ?? 'N/A'; ?>cc</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="users" class="h-5 w-5"></i>
-                                <span><?php echo htmlspecialchars($motorcycle['type']); ?></span>
+                                <i data-lucide="calendar" class="h-5 w-5"></i>
+                                <span><?php echo $motorcycle['year'] ?? 'N/A'; ?></span>
                             </div>
                         </div>
                         <div class="mb-6">
-                            <h3 class="font-semibold text-gray-900 mb-3">คุณสมบัติ</h3>
+                            <h3 class="font-semibold text-gray-900 mb-3">รายละเอียด</h3>
                             <div class="grid grid-cols-1 gap-2">
-                                <?php foreach ($motorcycle['features'] as $feature): ?>
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
-                                        <span class="text-gray-700"><?php echo htmlspecialchars($feature); ?></span>
-                                    </div>
-                                <?php endforeach; ?>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+                                    <span class="text-gray-700"><?php echo htmlspecialchars($motorcycle['description'] ?? 'รถจักรยานยนต์คุณภาพดี'); ?></span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="w-2 h-2 bg-blue-600 rounded-full"></div>
+                                    <span class="text-gray-700">ประเภท: <?php echo ($motorcycle['engineCc'] ?? 0) <= 150 ? 'ออโตเมติก' : 'manual'; ?></span>
+                                </div>
                             </div>
                         </div>
                         <div class="border-t pt-4">
                             <div class="flex justify-between items-center">
                                 <span class="text-lg font-medium text-gray-900">ราคาต่อวัน</span>
-                                <!-- (สำคัญ) เพิ่ม data- attribute นี้สำหรับ JavaScript -->
                                 <span id="price-per-day" data-price-per-day="<?php echo $motorcycle['pricePerDay']; ?>"
                                     class="text-2xl font-bold text-blue-600">
                                     ฿<?php echo $motorcycle['pricePerDay']; ?>
@@ -351,33 +288,24 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <h2 class="text-xl font-bold text-gray-900 mb-6">จองรถจักรยานยนต์</h2>
 
-                    <!-- (11) แสดง Error (ถ้ามี) -->
                     <?php if (!empty($error)): ?>
                         <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
                             <?php echo $error; ?>
                         </div>
                     <?php endif; ?>
 
-                    <!-- (12) เพิ่ม enctype="multipart/form-data" สำหรับไฟล์อัพโหลด -->
-                    <form method="POST" action="index.php?page=booking&id=<?php echo $motorcycle['id']; ?>"
-                        enctype="multipart/form-data" class="space-y-6">
+                    <form method="POST" action="index.php?page=booking&id=<?php echo $motorcycle['motorcycleId']; ?>"
+                        class="space-y-6">
                         
-                        <!-- User Info (จาก Session) -->
-                        <?php if (isset($_SESSION['user_email'])): ?>
+                        <!-- User Info -->
                         <div class="bg-gray-50 p-4 rounded-lg">
                             <div class="flex items-center gap-2 mb-2">
                                 <i data-lucide="user" class="h-5 w-5 text-gray-600"></i>
                                 <span class="font-medium">ข้อมูลผู้จอง</span>
                             </div>
-                            <p class="text-gray-700"><?php echo htmlspecialchars($_SESSION['user_name'] ?? ''); ?></p>
-                            <p class="text-gray-600"><?php echo htmlspecialchars($_SESSION['user_email'] ?? ''); ?></p>
+                            <p class="text-gray-700"><?php echo htmlspecialchars($_SESSION['user']['firstName'] ?? $_SESSION['user_name'] ?? $_SESSION['user_email'] ?? 'ผู้ใช้'); ?></p>
+                            <p class="text-gray-600"><?php echo htmlspecialchars($_SESSION['user']['email'] ?? $_SESSION['user_email'] ?? ''); ?></p>
                         </div>
-                        <?php else: ?>
-                            <div class="bg-yellow-50 p-4 rounded-lg text-yellow-800">
-                                <i data-lucide="alert-triangle" class="inline h-5 w-5"></i>
-                                คุณยังไม่ได้เข้าสู่ระบบ <a href="index.php?page=login" class="font-bold underline">คลิกที่นี่เพื่อเข้าสู่ระบบ</a>
-                            </div>
-                        <?php endif; ?>
 
                         <!-- Date Selection -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -399,6 +327,22 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                             </div>
                         </div>
 
+                        <!-- ✅ เพิ่ม: สถานที่รับรถ -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i data-lucide="map-pin" class="inline h-4 w-4 mr-1"></i>
+                                สถานที่รับรถ 
+                            </label>
+                            <select name="pickup_location" required
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="ร้านเทมป์เทชัน">ร้านเทมป์เทชัน</option>
+                                <option value="สนามบินหาดใหญ่">สนามบินหาดใหญ่</option>
+                                <option value="สถานีรถไฟหาดใหญ่">สถานีรถไฟหาดใหญ่</option>
+                                <option value="สถานีขนส่งหาดใหญ่">สถานีขนส่งหาดใหญ่</option>
+                                <option value="โรงแรมในเมืองหาดใหญ่">โรงแรมในเมืองหาดใหญ่</option>
+                            </select>
+                        </div>
+
                         <!-- Return Location -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -413,7 +357,7 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                             </select>
                         </div>
                         
-                        <!-- (13) *** NEW: Discount Code Section *** -->
+                        <!-- Discount Code Section -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                 <i data-lucide="percent" class="inline h-4 w-4 mr-1"></i>
@@ -428,11 +372,10 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                                     ใช้
                                 </button>
                             </div>
-                            <!-- (14) *** NEW: Discount Message Area *** -->
                             <p id="discount-message" class="text-sm mt-2"></p>
                         </div>
 
-                        <!-- Price Summary (นี่คือส่วนที่จะอัปเดตแบบ Live) -->
+                        <!-- Price Summary -->
                         <div id="price-summary-container" class="bg-blue-50 p-4 rounded-lg hidden">
                             <h3 class="font-semibold text-gray-900 mb-3">สรุปการจอง</h3>
                             <div class="space-y-2 text-sm">
@@ -444,7 +387,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                                     <span>ราคาต่อวัน:</span>
                                     <span>฿<?php echo $motorcycle['pricePerDay']; ?></span>
                                 </div>
-                                <!-- (15) *** NEW: Coupon Discount Row *** -->
                                 <div id="summary-coupon-row" class="flex justify-between text-green-600 hidden">
                                     <span>โค้ดส่วนลด (<span id="summary-coupon-code"></span>):</span>
                                     <span id="summary-coupon-discount">-฿0</span>
@@ -460,34 +402,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                             </div>
                             <div id="summary-offer-text"
                                 class="mt-3 p-2 bg-green-100 rounded text-green-800 text-sm hidden">
-                                <!-- ข้อความโปรโมชั่น -->
-                            </div>
-                        </div>
-
-                        <!-- Payment Section -->
-                        <div>
-                            <h3 class="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                                <i data-lucide="credit-card" class="h-5 w-5"></i>
-                                การชำระเงินมัดจำ
-                            </h3>
-                            <div class="bg-yellow-50 p-4 rounded-lg mb-4">
-                                <p class="text-sm text-yellow-800 mb-2">
-                                    <strong>ชำระเงินมัดจำ 500 บาท</strong> ผ่านการโอนเงิน
-                                </p>
-                                <div class="text-sm text-yellow-700">
-                                    <p>ธนาคารกสิกรไทย</p>
-                                    <p>เลขที่บัญชี: 123-4-56789-0</p>
-                                    <p>ชื่อบัญชี: ร้านเทมป์เทชัน</p>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    <i data-lucide="upload" class="inline h-4 w-4 mr-1"></i>
-                                    อัพโหลดหลักฐานการโอนเงิน *
-                                </label>
-                                <input type="file" name="payment_proof" accept="image/*" required id="payment-proof-input"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-                                <p id="payment-proof-filename" class="text-sm text-green-600 mt-1"></p>
                             </div>
                         </div>
 
@@ -504,30 +418,26 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
 
                         <!-- Submit Button -->
                         <button type="submit"
-                                <?php if (!isset($_SESSION['user_email'])) echo 'disabled'; // (16) ปิดปุ่มถ้าไม่ล็อกอิน ?>
-                                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors">
-                            <?php echo isset($_SESSION['user_email']) ? 'ยืนยันการจอง' : 'กรุณาเข้าสู่ระบบก่อน'; ?>
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors">
+                            ยืนยันการจอง
                         </button>
                     </form>
                 </div>
             </div>
-        <?php endif; // จบ if ($motorcycle) ?>
+        <?php endif; ?>
     </div>
 </div>
 
-<!-- (17) *** NEW: Inject Discount Data for JS *** -->
 <script>
     const all_discounts_json = <?php echo json_encode(array_values($all_discounts)); ?>;
 </script>
 
-<!-- (18) JavaScript (อัปเดตสำหรับ Discount Code) -->
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         const startDateInput = document.getElementById('start-date');
         const endDateInput = document.getElementById('end-date');
         const pricePerDayEl = document.getElementById('price-per-day');
 
-        // (A) ส่วนสรุปราคา
         const summaryContainer = document.getElementById('price-summary-container');
         const summaryDays = document.getElementById('summary-days');
         const summaryDiscountRow = document.getElementById('summary-discount-row');
@@ -535,7 +445,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
         const summaryTotal = document.getElementById('summary-total');
         const summaryOfferText = document.getElementById('summary-offer-text');
         
-        // (B) ส่วนคูปอง (ใหม่)
         const summaryCouponRow = document.getElementById('summary-coupon-row');
         const summaryCouponCode = document.getElementById('summary-coupon-code');
         const summaryCouponDiscount = document.getElementById('summary-coupon-discount');
@@ -543,24 +452,9 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
         const applyDiscountBtn = document.getElementById('apply-discount-btn');
         const discountMessage = document.getElementById('discount-message');
         
-        let appliedCoupon = null; // สถานะของคูปองที่ใช้ได้
-        let lastValidCode = '';   // โค้ดที่ใช้ได้ล่าสุด
+        let appliedCoupon = null;
+        let lastValidCode = '';
 
-        // (C) ส่วนไฟล์อัพโหลด
-        const paymentProofInput = document.getElementById('payment-proof-input');
-        const paymentProofFilename = document.getElementById('payment-proof-filename');
-
-        if (paymentProofInput && paymentProofFilename) {
-            paymentProofInput.addEventListener('change', function () {
-                if (paymentProofInput.files && paymentProofInput.files.length > 0) {
-                    paymentProofFilename.textContent = '✓ อัพโหลดไฟล์: ' + paymentProofInput.files[0].name;
-                } else {
-                    paymentProofFilename.textContent = '';
-                }
-            });
-        }
-
-        // (D) ฟังก์ชันคำนวณราคาทั้งหมด (อัปเดตใหม่)
         function calculatePrice() {
             if (!startDateInput || !endDateInput || !pricePerDayEl || !summaryContainer) return;
 
@@ -581,10 +475,11 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                 if (diffDays > 0) {
-                    // 1. คำนวณส่วนลดอัตโนมัติ (3 วัน 50 บาท)
                     let price = diffDays * pricePerDay;
                     let autoDiscountValue = 0;
                     let offerText = '';
+                    
+                    // ส่วนลดอัตโนมัติ (3 วัน 50 บาท)
                     if (diffDays >= 3) {
                         autoDiscountValue = Math.floor(diffDays / 3) * 50;
                         price -= autoDiscountValue;
@@ -594,10 +489,8 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                     let priceAfterAutoDiscount = price;
                     let couponDiscountValue = 0;
 
-                    // 2. คำนวณส่วนลดคูปอง (ถ้ามี)
-                    // (ตรวจสอบว่าโค้ดที่กรอก ตรงกับโค้ดที่ "ใช้" ได้หรือไม่)
+                    // ส่วนลดคูปอง
                     if (appliedCoupon && lastValidCode === discountCodeInput.value.toUpperCase()) {
-                        // เช็ค min_days อีกครั้ง (เผื่อผู้ใช้เปลี่ยนวัน)
                         if (diffDays >= appliedCoupon.min_days) {
                             if (appliedCoupon.type === 'fixed') {
                                 couponDiscountValue = appliedCoupon.value;
@@ -607,28 +500,25 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                                     couponDiscountValue = appliedCoupon.max_discount;
                                 }
                             }
-                            price -= couponDiscountValue; // หักส่วนลดคูปอง
+                            price -= couponDiscountValue;
                         } else {
-                            // ถ้าวันไม่ถึงขั้นต่ำ, ยกเลิกคูปอง
                             appliedCoupon = null;
                             lastValidCode = '';
                             discountMessage.textContent = `โค้ดนี้ต้องเช่าอย่างน้อย ${appliedCoupon.min_days} วัน`;
                             discountMessage.className = 'text-sm mt-2 text-red-600';
                         }
                     } else if (lastValidCode && lastValidCode !== discountCodeInput.value.toUpperCase()) {
-                        // ถ้าผู้ใช้เปลี่ยนโค้ด แต่ยังไม่กด "ใช้"
                         appliedCoupon = null;
                         lastValidCode = '';
                         discountMessage.textContent = 'กรุณากด "ใช้" เพื่อยืนยันโค้ด';
                         discountMessage.className = 'text-sm mt-2 text-yellow-600';
                     }
 
-                    // 3. Update UI
+                    // Update UI
                     summaryContainer.classList.remove('hidden');
                     summaryDays.textContent = `${diffDays} วัน`;
                     summaryTotal.textContent = `฿${price.toFixed(0)}`;
 
-                    // UI: ส่วนลดอัตโนมัติ
                     if (autoDiscountValue > 0) {
                         summaryDiscountRow.classList.remove('hidden');
                         summaryDiscount.textContent = `-฿${autoDiscountValue}`;
@@ -639,7 +529,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                         summaryOfferText.classList.add('hidden');
                     }
                     
-                    // UI: ส่วนลดคูปอง
                     if (couponDiscountValue > 0 && appliedCoupon) {
                         summaryCouponRow.classList.remove('hidden');
                         summaryCouponCode.textContent = appliedCoupon.code;
@@ -654,7 +543,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
             }
         }
 
-        // (E) *** NEW: ฟังก์ชันตรวจสอบโค้ดส่วนลด ***
         function applyDiscountCode() {
             const code = discountCodeInput.value.toUpperCase();
             if (!code) {
@@ -663,7 +551,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 return;
             }
 
-            // (ตรวจสอบวัน)
             const startDate = startDateInput.value;
             const endDate = endDateInput.value;
             if (!startDate || !endDate) {
@@ -671,6 +558,7 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 discountMessage.className = 'text-sm mt-2 text-red-600';
                 return;
             }
+
             const start = new Date(startDate);
             const end = new Date(endDate);
             const diffTime = Math.abs(end.getTime() - start.getTime());
@@ -682,7 +570,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                  return;
             }
             
-            // (ค้นหาโค้ดใน JSON)
             const foundCode = all_discounts_json.find(d => d.code === code);
             
             if (!foundCode) {
@@ -690,7 +577,6 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                 discountMessage.className = 'text-sm mt-2 text-red-600';
                 appliedCoupon = null;
             } else {
-                // (ตรวจสอบความถูกต้องของโค้ด)
                 const now = new Date();
                 const codeStart = new Date(foundCode.start_date);
                 const codeEnd = new Date(foundCode.end_date);
@@ -717,31 +603,27 @@ if (isset($_SESSION['mock_bookings']) && isset($_SESSION['user_email'])) {
                      discountMessage.className = 'text-sm mt-2 text-red-600';
                      appliedCoupon = null;
                 } else {
-                    // !! สำเร็จ !!
                     discountMessage.textContent = 'ใช้โค้ดส่วนลดสำเร็จ!';
                     discountMessage.className = 'text-sm mt-2 text-green-600';
-                    appliedCoupon = foundCode; // บันทึกคูปองที่ใช้ได้
-                    lastValidCode = foundCode.code; // บันทึกชื่อโค้ดที่ใช้ได้
+                    appliedCoupon = foundCode;
+                    lastValidCode = foundCode.code;
                 }
             }
             
-            // คำนวณราคาใหม่ทุกครั้งที่กดปุ่ม
             calculatePrice();
         }
 
-        // (F) Event Listeners
         if (applyDiscountBtn) {
              applyDiscountBtn.addEventListener('click', applyDiscountCode);
         }
         if (startDateInput && endDateInput) {
             startDateInput.addEventListener('change', function () {
                 endDateInput.min = startDateInput.value;
-                calculatePrice(); // คำนวณใหม่ (จะล้างคูปองถ้าโค้ดไม่ตรง)
+                calculatePrice();
             });
             endDateInput.addEventListener('change', calculatePrice);
         }
          if (discountCodeInput) {
-             // ถ้าผู้ใช้พิมพ์โค้ดใหม่, ให้ล้างสถานะ "ใช้ได้" จนกว่าจะกดยืนยัน
             discountCodeInput.addEventListener('input', function() {
                 if (discountCodeInput.value.toUpperCase() !== lastValidCode) {
                     appliedCoupon = null;

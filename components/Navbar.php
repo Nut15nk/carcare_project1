@@ -1,12 +1,21 @@
-<!-- components/Navbar.php -->
-<!-- อัปเดตเป็นเวอร์ชัน PHP ที่แปลงจาก React TSX -->
+<?php
+// ตรวจสอบ session status - ใช้ structure เดียวกันทั่วระบบ
+$isLoggedIn = isset($_SESSION['user']);
+$userEmail = $_SESSION['user']['email'] ?? $_SESSION['user_email'] ?? '';
+$userName = $_SESSION['user']['firstName'] ?? $_SESSION['user_name'] ?? $userEmail;
+$userRole = $_SESSION['user']['role'] ?? $_SESSION['user_role'] ?? '';
+
+// ตรวจสอบ role จาก database จริง
+$isAdmin = ($userRole === 'admin' || $userRole === 'ADMIN' || $userRole === 'OWNER');
+$isEmployee = ($userRole === 'employee' || $userRole === 'EMPLOYEE' || $isAdmin);
+?>
+
 <nav class="bg-gradient-to-r from-blue-600 to-blue-800 text-white shadow-lg">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
             
             <!-- Logo -->
             <a href="index.php?page=home" class="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-                <!-- แปลง <Bike> เป็น <i data-lucide="..."> -->
                 <i data-lucide="bike" class="h-8 w-8"></i>
                 <div>
                     <span class="text-xl font-bold">เทมป์เทชัน</span>
@@ -16,83 +25,126 @@
 
             <!-- Desktop Menu -->
             <div class="hidden md:flex items-center space-x-8">
-                <a href="index.php?page=home" class="hover:text-blue-200 transition-colors">หน้าแรก</a>
-                <a href="index.php?page=motorcycles" class="hover:text-blue-200 transition-colors">รถเช่า</a>
+                <a href="index.php?page=home" class="hover:text-blue-200 transition-colors font-medium">หน้าแรก</a>
+                <a href="index.php?page=motorcycles" class="hover:text-blue-200 transition-colors font-medium">รถเช่า</a>
                 
-                <?php // แปลง {user ? (...) : (...)} เป็น if/else ของ PHP ?>
-                <?php
-                // Dev helper: จำลองการล็อกอินแบบรวดเร็วโดยใช้ query param ?as=employee | as=admin | as=logout
-                if (isset($_GET['as'])) {
-                    $who = $_GET['as'];
-                    if ($who === 'employee') {
-                        $_SESSION['user_email'] = 'employee@temptation.com';
-                        $_SESSION['user_role'] = 'employee';
-                        $_SESSION['user_name'] = 'พนักงานตัวอย่าง';
-                    } elseif ($who === 'admin') {
-                        $_SESSION['user_email'] = 'admin@temptation.com';
-                        unset($_SESSION['user_role']);
-                        $_SESSION['user_name'] = 'แอดมินตัวอย่าง';
-                    } elseif ($who === 'logout') {
-                        unset($_SESSION['user_email'], $_SESSION['user_role'], $_SESSION['user_name']);
-                    }
-                }
-                ?>
-                <?php if (isset($_SESSION['user_email'])): // ตรวจสอบว่าล็อกอินหรือยัง (ใช้ session ที่เรามี) ?>
-                    
-                    <div class="flex items-center space-x-4">
-                        <?php // ตรวจสอบ Role - จำลอง admin@temptation.com เป็น admin ?>
-                        <?php 
-                            $isAdmin = (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'admin@temptation.com');
-                            $isEmployee = (
-                                (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'employee@temptation.com') ||
-                                (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
-                            );
-                        ?>
-                        <?php if ($isAdmin): ?>
-                            <a href="index.php?page=admin" class="flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                                <i data-lucide="bar-chart-3" class="h-4 w-4"></i>
-                                <span>จัดการระบบ</span>
-                            </a>
-                        <?php endif; ?>
-                        
-                        <?php if ($isEmployee): ?>
-                            <a href="index.php?page=employee" class="flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                                <i data-lucide="settings" class="h-4 w-4"></i>
-                                <span>จัดการงาน</span>
-                            </a>
+                <?php if ($isLoggedIn): ?>
+                    <!-- เมนูสำหรับผู้ใช้ที่ล็อกอินแล้ว -->
+                    <div class="flex items-center space-x-6">
+                        <!-- เมนูการจอง -->
+                        <a href="index.php?page=my-bookings" class="flex items-center space-x-1 hover:text-blue-200 transition-colors font-medium">
+                            <i data-lucide="calendar" class="h-4 w-4"></i>
+                            <span>การจองของฉัน</span>
+                        </a>
+
+                        <?php if ($isAdmin || $isEmployee): ?>
+                            <!-- เมนูจัดการสำหรับ Admin/Employee -->
+                            <div class="relative" id="management-menu">
+                                <button class="flex items-center space-x-1 hover:text-blue-200 transition-colors font-medium" id="management-button">
+                                    <i data-lucide="settings" class="h-4 w-4"></i>
+                                    <span>จัดการ</span>
+                                    <i data-lucide="chevron-down" class="h-4 w-4 transition-transform" id="management-chevron"></i>
+                                </button>
+                                
+                                <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 hidden z-50 border" id="management-dropdown">
+                                    <?php if ($isAdmin): ?>
+                                        <a href="index.php?page=admin" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="bar-chart-3" class="h-4 w-4"></i>
+                                            <span>แดชบอร์ด</span>
+                                        </a>
+                                        <a href="index.php?page=admin&section=motorcycles" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="bike" class="h-4 w-4"></i>
+                                            <span>จัดการรถ</span>
+                                        </a>
+                                        <a href="index.php?page=admin&section=bookings" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="calendar" class="h-4 w-4"></i>
+                                            <span>จัดการการจอง</span>
+                                        </a>
+                                        <a href="index.php?page=admin&section=users" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="users" class="h-4 w-4"></i>
+                                            <span>จัดการผู้ใช้</span>
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="index.php?page=employee" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="clipboard-list" class="h-4 w-4"></i>
+                                            <span>แดชบอร์ด</span>
+                                        </a>
+                                        <a href="index.php?page=employee&section=bookings" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="calendar" class="h-4 w-4"></i>
+                                            <span>จัดการการจอง</span>
+                                        </a>
+                                        <a href="index.php?page=employee&section=payments" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                            <i data-lucide="credit-card" class="h-4 w-4"></i>
+                                            <span>จัดการการชำระเงิน</span>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         <?php endif; ?>
 
-                        <a href="index.php?page=profile" class="flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                            <i data-lucide="user" class="h-4 w-4"></i>
-                            <?php // สมมติว่าเก็บชื่อใน $_SESSION['user_name'] หรือใช้ email แทน ?>
-                            <span><?php echo htmlspecialchars($_SESSION['user_name'] ?? $_SESSION['user_email']); ?></span>
-                        </a>
-                        
-                        <?php // แปลง handleLogout() เป็นลิงก์ไป logout.php ?>
-                        <a href="logout.php" class="flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                            <i data-lucide="log-out" class="h-4 w-4"></i>
-                            <span>ออกจากระบบ</span>
-                        </a>
+                        <!-- เมนูผู้ใช้ -->
+                        <div class="relative" id="user-menu">
+                            <button class="flex items-center space-x-2 hover:text-blue-200 transition-colors font-medium" id="user-button">
+                                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                    <i data-lucide="user" class="h-4 w-4"></i>
+                                </div>
+                                <span class="max-w-32 truncate"><?php echo htmlspecialchars($userName ?: $userEmail); ?></span>
+                                <i data-lucide="chevron-down" class="h-4 w-4 transition-transform" id="user-chevron"></i>
+                            </button>
+                            
+                            <div class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-2 hidden z-50 border" id="user-dropdown">
+                                <div class="px-4 py-3 border-b">
+                                    <p class="font-semibold text-gray-900 truncate"><?php echo htmlspecialchars($userName ?: $userEmail); ?></p>
+                                    <p class="text-sm text-gray-600 truncate"><?php echo htmlspecialchars($userEmail); ?></p>
+                                    <?php if ($isAdmin || $isEmployee): ?>
+                                        <div class="mt-1">
+                                            <?php if ($isAdmin): ?>
+                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                    <i data-lucide="shield" class="h-3 w-3 mr-1"></i>
+                                                    ผู้ดูแลระบบ
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                    <i data-lucide="briefcase" class="h-3 w-3 mr-1"></i>
+                                                    พนักงาน
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                
+                                <a href="index.php?page=profile" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                    <i data-lucide="user" class="h-4 w-4"></i>
+                                    <span>โปรไฟล์ของฉัน</span>
+                                </a>
+                                <a href="index.php?page=my-bookings" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-blue-50 transition-colors">
+                                    <i data-lucide="calendar" class="h-4 w-4"></i>
+                                    <span>การจองของฉัน</span>
+                                </a>
+                                
+                                <hr class="my-2">
+                                
+                                <a href="logout.php" class="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-red-50 transition-colors">
+                                    <i data-lucide="log-out" class="h-4 w-4"></i>
+                                    <span>ออกจากระบบ</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
-
-                <?php else: // ถ้ายังไม่ล็อกอิน ?>
-                    
+                <?php else: ?>
+                    <!-- เมนูสำหรับผู้ใช้ที่ยังไม่ได้ล็อกอิน -->
                     <div class="flex items-center space-x-4">
-                        <a href="index.php?page=login" class="hover:text-blue-200 transition-colors">เข้าสู่ระบบ</a>
-                        <a 
-                            href="index.php?page=register" 
-                            class="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-lg transition-colors"
-                        >
+                        <a href="login.php" class="hover:text-blue-200 transition-colors font-medium">เข้าสู่ระบบ</a>
+                        <a href="register.php" class="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-lg transition-colors font-medium">
                             สมัครสมาชิก
                         </a>
                     </div>
-
                 <?php endif; ?>
             </div>
 
             <!-- Mobile menu button -->
             <div class="md:hidden">
-                <button id="mobile-menu-button" class="text-white hover:text-blue-200">
+                <button id="mobile-menu-button" class="text-white hover:text-blue-200 p-2 rounded-lg hover:bg-blue-700 transition-colors">
                     <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -100,48 +152,74 @@
             </div>
         </div>
         
-        <!-- Mobile menu (ซ่อนไว้โดยค่าเริ่มต้น) -->
-        <!-- แปลง {mobileOpen && (...)} โดยใช้ id และ JS ด้านล่าง -->
-        <div id="mobile-menu-content" class="md:hidden mt-2 flex flex-col space-y-2 hidden pb-4">
-            <a href="index.php?page=home" class="mobile-menu-link hover:text-blue-200 transition-colors">หน้าแรก</a>
-            <a href="index.php?page=motorcycles" class="mobile-menu-link hover:text-blue-200 transition-colors">รถเช่า</a>
+        <!-- Mobile menu -->
+        <div id="mobile-menu-content" class="md:hidden mt-2 flex flex-col space-y-1 hidden pb-4 border-t border-blue-700 pt-4">
+            <a href="index.php?page=home" class="mobile-menu-link px-4 py-3 hover:bg-blue-700 transition-colors rounded-lg font-medium">หน้าแรก</a>
+            <a href="index.php?page=motorcycles" class="mobile-menu-link px-4 py-3 hover:bg-blue-700 transition-colors rounded-lg font-medium">รถเช่า</a>
             
-            <?php if (isset($_SESSION['user_email'])): ?>
-                <hr class="border-blue-700"/>
-                <?php 
-                    $isAdmin = (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'admin@temptation.com');
-                    $isEmployee = (
-                        (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'employee@temptation.com') ||
-                        (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
-                    );
-                ?>
-                <?php if ($isAdmin): ?>
-                    <a href="index.php?page=admin" class="mobile-menu-link flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                        <i data-lucide="bar-chart-3" class="h-4 w-4"></i>
-                        <span>จัดการระบบ</span>
-                    </a>
-                <?php endif; ?>
+            <?php if ($isLoggedIn): ?>
+                <hr class="border-blue-700 mx-4"/>
                 
-                <?php if ($isEmployee): ?>
-                    <a href="index.php?page=employee" class="mobile-menu-link flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                        <i data-lucide="settings" class="h-4 w-4"></i>
-                        <span>จัดการงาน</span>
-                    </a>
+                <!-- เมนูการจอง (Mobile) -->
+                <a href="index.php?page=my-bookings" class="mobile-menu-link px-4 py-3 hover:bg-blue-700 transition-colors rounded-lg font-medium flex items-center space-x-3">
+                    <i data-lucide="calendar" class="h-5 w-5"></i>
+                    <span>การจองของฉัน</span>
+                </a>
+
+                <?php if ($isAdmin || $isEmployee): ?>
+                    <!-- เมนูจัดการ (Mobile) -->
+                    <div class="px-4 py-3">
+                        <p class="text-blue-200 text-sm font-medium mb-2">การจัดการ</p>
+                        <div class="space-y-2 ml-4">
+                            <?php if ($isAdmin): ?>
+                                <a href="index.php?page=admin" class="block py-2 text-sm hover:text-blue-200 transition-colors">แดชบอร์ด</a>
+                                <a href="index.php?page=admin&section=motorcycles" class="block py-2 text-sm hover:text-blue-200 transition-colors">จัดการรถ</a>
+                                <a href="index.php?page=admin&section=bookings" class="block py-2 text-sm hover:text-blue-200 transition-colors">จัดการการจอง</a>
+                                <a href="index.php?page=admin&section=users" class="block py-2 text-sm hover:text-blue-200 transition-colors">จัดการผู้ใช้</a>
+                            <?php else: ?>
+                                <a href="index.php?page=employee" class="block py-2 text-sm hover:text-blue-200 transition-colors">แดชบอร์ด</a>
+                                <a href="index.php?page=employee&section=bookings" class="block py-2 text-sm hover:text-blue-200 transition-colors">จัดการการจอง</a>
+                                <a href="index.php?page=employee&section=payments" class="block py-2 text-sm hover:text-blue-200 transition-colors">จัดการการชำระเงิน</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 <?php endif; ?>
 
-                <a href="index.php?page=profile" class="mobile-menu-link flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                    <i data-lucide="user" class="h-4 w-4"></i>
-                    <span><?php echo htmlspecialchars($_SESSION['user_name'] ?? $_SESSION['user_email']); ?></span>
+                <!-- ข้อมูลผู้ใช้ (Mobile) -->
+                <div class="px-4 py-3 border-t border-blue-700 mt-2 pt-4">
+                    <p class="font-medium text-blue-100"><?php echo htmlspecialchars($userName ?: $userEmail); ?></p>
+                    <p class="text-sm text-blue-300"><?php echo htmlspecialchars($userEmail); ?></p>
+                    <?php if ($isAdmin || $isEmployee): ?>
+                        <div class="mt-2">
+                            <?php if ($isAdmin): ?>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-600 text-white">
+                                    <i data-lucide="shield" class="h-3 w-3 mr-1"></i>
+                                    ผู้ดูแลระบบ
+                                </span>
+                            <?php else: ?>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
+                                    <i data-lucide="briefcase" class="h-3 w-3 mr-1"></i>
+                                    พนักงาน
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- เมนูผู้ใช้ (Mobile) -->
+                <a href="index.php?page=profile" class="mobile-menu-link px-4 py-3 hover:bg-blue-700 transition-colors rounded-lg font-medium flex items-center space-x-3">
+                    <i data-lucide="user" class="h-5 w-5"></i>
+                    <span>โปรไฟล์ของฉัน</span>
                 </a>
                 
-                <a href="logout.php" class="mobile-menu-link flex items-center space-x-1 hover:text-blue-200 transition-colors">
-                    <i data-lucide="log-out" class="h-4 w-4"></i>
+                <a href="logout.php" class="mobile-menu-link px-4 py-3 hover:bg-red-700 transition-colors rounded-lg font-medium flex items-center space-x-3 mt-2">
+                    <i data-lucide="log-out" class="h-5 w-5"></i>
                     <span>ออกจากระบบ</span>
                 </a>
             <?php else: ?>
-                <hr class="border-blue-700"/>
-                <a href="index.php?page=login" class="mobile-menu-link hover:text-blue-200 transition-colors">เข้าสู่ระบบ</a>
-                <a href="index.php?page=register" class="mobile-menu-link bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-lg transition-colors text-center">
+                <hr class="border-blue-700 mx-4"/>
+                <a href="login.php" class="mobile-menu-link px-4 py-3 hover:bg-blue-700 transition-colors rounded-lg font-medium">เข้าสู่ระบบ</a>
+                <a href="register.php" class="mobile-menu-link px-4 py-3 bg-blue-500 hover:bg-blue-400 transition-colors rounded-lg font-medium text-center mx-4">
                     สมัครสมาชิก
                 </a>
             <?php endif; ?>
@@ -149,29 +227,95 @@
     </div>
 </nav>
 
-<!-- JavaScript สำหรับ Mobile Menu (จำลอง useState) -->
-<!-- สคริปต์นี้ควรจะทำงานเพราะ index.php โหลดหน้านี้เข้ามา -->
 <script>
-    // รอให้ DOM โหลดเสร็จก่อน (ป้องกันสคริปต์รันก่อน HTML)
-    document.addEventListener("DOMContentLoaded", function() {
-        const menuButton = document.getElementById('mobile-menu-button');
-        const menuContent = document.getElementById('mobile-menu-content');
-        const menuLinks = document.querySelectorAll('.mobile-menu-link');
+document.addEventListener("DOMContentLoaded", function() {
+    // Mobile Menu Toggle
+    const menuButton = document.getElementById('mobile-menu-button');
+    const menuContent = document.getElementById('mobile-menu-content');
+    const menuLinks = document.querySelectorAll('.mobile-menu-link');
 
-        if (menuButton && menuContent) {
-            // 1. กดปุ่มเพื่อเปิด/ปิดเมนู (เหมือน setMobileOpen(!mobileOpen))
-            menuButton.addEventListener('click', function() {
-                menuContent.classList.toggle('hidden');
-            });
+    if (menuButton && menuContent) {
+        menuButton.addEventListener('click', function() {
+            menuContent.classList.toggle('hidden');
+        });
 
-            // 2. กดลิงก์ในเมนูเพื่อปิดเมนู (เหมือน onClick={() => setMobileOpen(false)})
-            menuLinks.forEach(function(link) {
-                link.addEventListener('click', function() {
-                    if (!menuContent.classList.contains('hidden')) {
-                        menuContent.classList.add('hidden');
-                    }
-                });
+        menuLinks.forEach(function(link) {
+            link.addEventListener('click', function() {
+                menuContent.classList.add('hidden');
             });
-        }
+        });
+    }
+
+    // User Dropdown Toggle
+    const userButton = document.getElementById('user-button');
+    const userDropdown = document.getElementById('user-dropdown');
+    const userChevron = document.getElementById('user-chevron');
+
+    if (userButton && userDropdown) {
+        userButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isHidden = userDropdown.classList.contains('hidden');
+            
+            // Close all other dropdowns
+            closeAllDropdowns();
+            
+            // Toggle this dropdown
+            userDropdown.classList.toggle('hidden', !isHidden);
+            userChevron.classList.toggle('rotate-180', !isHidden);
+        });
+    }
+
+    // Management Dropdown Toggle
+    const managementButton = document.getElementById('management-button');
+    const managementDropdown = document.getElementById('management-dropdown');
+    const managementChevron = document.getElementById('management-chevron');
+
+    if (managementButton && managementDropdown) {
+        managementButton.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const isHidden = managementDropdown.classList.contains('hidden');
+            
+            // Close all other dropdowns
+            closeAllDropdowns();
+            
+            // Toggle this dropdown
+            managementDropdown.classList.toggle('hidden', !isHidden);
+            managementChevron.classList.toggle('rotate-180', !isHidden);
+        });
+    }
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function() {
+        closeAllDropdowns();
     });
+
+    // Prevent dropdown close when clicking inside dropdown
+    if (userDropdown) {
+        userDropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    if (managementDropdown) {
+        managementDropdown.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+
+    function closeAllDropdowns() {
+        if (userDropdown) {
+            userDropdown.classList.add('hidden');
+            userChevron.classList.remove('rotate-180');
+        }
+        if (managementDropdown) {
+            managementDropdown.classList.add('hidden');
+            managementChevron.classList.remove('rotate-180');
+        }
+    }
+
+    // Initialize Lucide icons
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+});
 </script>

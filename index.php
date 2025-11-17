@@ -1,120 +1,134 @@
 <?php
-// เริ่ม session และ output buffering
-session_start();
-ob_start();
+    // เริ่ม session ในทุกหน้าที่ด้านบนสุด
+    session_start();
+    // เปิด output buffering เพื่อให้ไฟล์ที่ถูก include สามารถเรียก header() ได้
+    ob_start();
 
-// โหลดไฟล์ API
-require_once 'api/config.php';
-require_once 'api/auth.php';
+    // ตรวจสอบว่ามี flash message จากหน้าที่แล้วหรือไม่
+    $flash_message = $_SESSION['flash_message'] ?? null;
+    if ($flash_message) {
+        unset($_SESSION['flash_message']);
+    }
 
-// (0) Auth Guard: ตรวจสอบการล็อกอิน
-$currentPage = $_GET['page'] ?? 'home';
+    // (0) Auth Guard: ตรวจสอบว่า page ไหนต้อง login ก่อน
+    $currentPage = $_GET['page'] ?? 'home';
+    if ($currentPage === 'booking' && ! isset($_SESSION['user'])) {
+        $_SESSION['redirect_url']  = $_SERVER['REQUEST_URI'];
+        $_SESSION['flash_message'] = [
+            'type'    => 'error',
+            'message' => 'กรุณาเข้าสู่ระบบก่อนทำการจอง',
+        ];
+        header("Location: login.php");
+        exit;
+    }
 
-// หน้าที่ต้องล็อกอินก่อน
-$protectedPages = ['booking', 'profile', 'admin', 'employee'];
+    // หากเข้าถึง index.php โดยตรง ให้เด้งไปหน้า home
+    if (basename($_SERVER['PHP_SELF']) === 'index.php' && empty($_GET['page'])) {
+        header('Location: index.php?page=home');
+        exit;
+    }
 
-if (in_array($currentPage, $protectedPages) && !AuthService::isLoggedIn()) {
-    $_SESSION['redirect_url'] = $_SERVER['REQUEST_URI'];
-    header("Location: login.php");
-    exit;
-}
+    // ดึงชื่อหน้าจาก URL
+    $page = $_GET['page'] ?? 'home';
 
-// หากเข้าถึง index.php โดยตรง ให้เด้งไปหน้า home
-if (basename($_SERVER['PHP_SELF']) === 'index.php' && empty($_GET['page'])) {
-    header('Location: index.php?page=home');
-    exit;
-}
+    // รายการหน้าที่อนุญาต (Whitelist)
+    $pageMap = [
+        'home'                 => 'pages/HomePages.php',
+        'motorcycles'          => 'pages/MotorcyclesPages.php',
+        'booking'              => 'pages/BookingPages.php',
+        'booking-confirmation' => 'pages/BookingConfirmation.php',
+        'payment'              => 'pages/PaymentPages.php',
+        'my-bookings'          => 'pages/MyBookings.php',
+        'profile'              => 'pages/ProfilePages.php',
+        'employee'             => 'pages/employee/EmployeeRouter.php',
+        'admin'                => 'pages/admin/AdminRouter.php',
+    ];
 
-// รายการหน้าที่อนุญาต (Whitelist)
-$pageMap = [
-    'home' => 'pages/HomePages.php',
-    'motorcycles' => 'pages/MotorcyclesPages.php',
-    'booking' => 'pages/BookingPages.php',
-    'profile' => 'pages/ProfilePages.php',
-    'employee' => 'pages/employee/EmployeeRouter.php',
-    'admin' => 'pages/admin/AdminRouter.php',
-];
+    // ตรวจสอบว่าหน้าที่ขอมีอยู่ใน $pageMap หรือไม่
+    if (array_key_exists($page, $pageMap)) {
+        $contentFile = $pageMap[$page];
+    } else {
+        http_response_code(404);
+        $contentFile = 'pages/404.php';
+    }
 
-// ตรวจสอบว่าหน้าที่ขอมีอยู่ใน $pageMap หรือไม่
-if (array_key_exists($currentPage, $pageMap)) {
-    $contentFile = $pageMap[$currentPage];
-} else {
-    // ถ้าไม่มี, ให้ไปหน้า 404
-    http_response_code(404);
-    $contentFile = 'pages/404.php';
-}
+    // (POST Handler) ตรวจสอบ POST request จาก booking form
+    if ($page === 'booking' && $_SERVER["REQUEST_METHOD"] == "POST") {
+        // ดึง POST data
+        $startDate      = $_POST['start_date'] ?? '';
+        $endDate        = $_POST['end_date'] ?? '';
+        $returnLocation = $_POST['return_location'] ?? '';
 
-// จัดการ Flash Messages
-$flashMessage = $_SESSION['flash_message'] ?? null;
-if ($flashMessage) {
-    unset($_SESSION['flash_message']); // ลบหลังจากแสดงแล้ว
-}
+        // ตรวจสอบไฟล์อัพโหลด
+        if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] == UPLOAD_ERR_OK) {
+            $uploadDir = 'uploads/';
+
+            // สร้างโฟลเดอร์ถ้ายังไม่มี
+            if (! is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+
+            $fileName   = time() . '_' . basename($_FILES['payment_proof']['name']);
+            $targetPath = $uploadDir . $fileName;
+
+            if (move_uploaded_file($_FILES['payment_proof']['tmp_name'], $targetPath)) {
+                // อัพโหลดสำเร็จ - ตั้งค่า flash message และ redirect
+                $_SESSION['flash_message'] = [
+                    'type'    => 'success',
+                    'message' => 'จองสำเร็จ! เราจะติดต่อกลับภายใน 24 ชั่วโมง',
+                ];
+                header("Location: index.php?page=profile");
+                exit;
+            }
+        }
+    }
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Motorcycle Rental System</title>
+    <title>Motorcycle Booking</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="min-h-screen bg-gray-50 flex flex-col">
 
-    <!-- Navbar -->
+    <!-- 1. ส่วน Navbar -->
     <?php include 'components/Navbar.php'; ?>
 
-    <!-- Flash Messages -->
-    <?php if ($flashMessage): ?>
-        <div class="fixed top-20 right-4 z-50 max-w-sm">
-            <div class="<?php echo $flashMessage['type'] === 'success' ? 'bg-green-500' : 'bg-red-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
-                <div class="flex items-center">
-                    <i data-lucide="<?php echo $flashMessage['type'] === 'success' ? 'check-circle' : 'alert-circle'; ?>" class="h-5 w-5 mr-2"></i>
-                    <span><?php echo htmlspecialchars($flashMessage['message']); ?></span>
-                </div>
-            </div>
+    <!-- 2. Flash Message -->
+    <?php if ($flash_message): ?>
+        <div class="fixed top-20 right-4 z-50<?php echo $flash_message['type'] === 'error' ? 'bg-red-500' : 'bg-green-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
+            <?php echo $flash_message['message']; ?>
         </div>
     <?php endif; ?>
 
-    <!-- Main Content -->
+    <!-- 3. ส่วนเนื้อหาหลัก -->
     <main class="flex-1">
         <?php
-        // โหลดไฟล์เนื้อหาที่เลือก
-        if (file_exists($contentFile)) {
-            include $contentFile;
-        } else {
-            echo "<div class='container mx-auto px-4 py-8'>
-                    <div class='text-center'>
-                        <h1 class='text-2xl font-bold text-red-600 mb-4'>ไฟล์ไม่พบ</h1>
-                        <p class='text-gray-600'>ไม่สามารถโหลดหน้า '$currentPage' ได้</p>
-                        <a href='index.php?page=home' class='mt-4 inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700'>
-                            กลับหน้าหลัก
-                        </a>
-                    </div>
-                  </div>";
-        }
+            if (file_exists($contentFile)) {
+                include $contentFile;
+            } else {
+                echo "<p class='text-center text-red-500 p-4'>Error: Content file not found.</p>";
+                include 'pages/404.php';
+            }
         ?>
     </main>
 
-    <!-- Footer -->
+    <!-- 4. ส่วน Footer -->
     <?php include 'components/Footer.php'; ?>
 
     <script>
-        // เปิดใช้งาน Lucide icons
         lucide.createIcons();
 
-        // Auto-hide flash messages after 5 seconds
-        <?php if ($flashMessage): ?>
-            setTimeout(() => {
-                const flashMsg = document.querySelector('.fixed.top-20');
-                if (flashMsg) {
-                    flashMsg.style.transition = 'opacity 0.5s';
-                    flashMsg.style.opacity = '0';
-                    setTimeout(() => flashMsg.remove(), 500);
-                }
-            }, 5000);
-        <?php endif; ?>
+        // Auto-hide flash message
+        setTimeout(() => {
+            const flashMsg = document.querySelector('.fixed.top-20');
+            if (flashMsg) {
+                flashMsg.remove();
+            }
+        }, 5000);
     </script>
 </body>
 </html>
-<?php ob_end_flush(); ?>

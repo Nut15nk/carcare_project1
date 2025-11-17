@@ -1,26 +1,22 @@
 <?php
 // (A) ส่วนตรรกะ (Logic) - ต้องอยู่ด้านบนสุด
-session_start(); // เริ่ม session เพื่อเก็บสถานะล็อกอิน
+session_start();
 
 $error = '';
-$email = ''; // เก็บค่า email ไว้แสดงในฟอร์มหากกรอกผิด
+$email = '';
 
-// ตรวจสอบว่ามีการส่งฟอร์มมาหรือไม่ (ใช้วิธี POST)
+// ตรวจสอบว่ามีการส่งฟอร์มมาหรือไม่
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // ดึงข้อมูลจากฟอร์ม
     $email = $_POST['email'];
     $password = $_POST['password'];
 
-    // โหลดไฟล์ API - แก้ path ให้ถูกต้อง
-    // ถ้า login.php อยู่ใน root directory ให้ใช้ require_once 'api/config.php';
-    // ถ้า login.php อยู่ในโฟลเดอร์อื่น ให้ปรับ path ตามโครงสร้างจริง
-    
-    // ลองโหลดไฟล์ API ด้วย path ต่างๆ
+    // โหลดไฟล์ API
     $apiPaths = [
-        'api/config.php',           // ถ้า login.php อยู่ใน root
-        '../api/config.php',        // ถ้า login.php อยู่ในโฟลเดอร์
-        '../../api/config.php',     // ถ้า login.php อยู่ในโฟลเดอร์ลึก
+        'api/config.php',
+        '../api/config.php',
+        '../../api/config.php',
     ];
     
     $configLoaded = false;
@@ -36,7 +32,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         die('ไม่พบไฟล์ config.php กรุณาตรวจสอบโครงสร้างโฟลเดอร์');
     }
     
-    // โหลดไฟล์ auth.php ด้วย path เดียวกัน
+    // โหลดไฟล์ auth.php
     $authPaths = [
         'api/auth.php',
         '../api/auth.php', 
@@ -56,16 +52,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         die('ไม่พบไฟล์ auth.php กรุณาตรวจสอบโครงสร้างโฟลเดอร์');
     }
 
-    // ใช้ API จริงแทน mock data
+    // ใช้ API จริง
     try {
         $user = AuthService::login($email, $password);
         
         if ($user) {
-            // ล็อกอินสำเร็จ: เก็บข้อมูลผู้ใช้ใน session
-            $_SESSION['user'] = $user;
+            // ล็อกอินสำเร็จ: เก็บข้อมูลผู้ใช้ใน session ใหม่ (ใช้ structure หลัก)
+            $_SESSION['user'] = $user; // structure หลัก
+            $_SESSION['user_email'] = $user['email'] ?? $email; // สำหรับ backward compatibility
+            $_SESSION['user_name'] = $user['firstName'] ?? $user['name'] ?? 'ผู้ใช้'; // สำหรับ backward compatibility
+            $_SESSION['user_role'] = $user['role'] ?? 'customer'; // สำหรับ backward compatibility
+            $_SESSION['user_id'] = $user['userId'] ?? $user['id'] ?? null; // สำหรับ backward compatibility
 
             // ตรวจสอบว่า redirect_url มีอยู่ใน session หรือไม่
-            $redirectUrl = $_SESSION['redirect_url'] ?? null;
+            $redirectUrl = $_SESSION['redirect_url'] ?? 'index.php';
             if ($redirectUrl) {
                 unset($_SESSION['redirect_url']);
                 header("Location: $redirectUrl");
@@ -73,20 +73,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             }
 
             // ส่งผู้ใช้ไปหน้าหลักตาม role
-            switch ($user['role']) {
-                case 'CUSTOMER':
-                    header("Location: index.php");
-                    break;
+            $userRole = $user['role'] ?? 'customer';
+            switch (strtoupper($userRole)) {
                 case 'EMPLOYEE':
-                    header("Location: pages/employee/EmployeeRouter.php");
+                case 'STAFF':
+                    header("Location: index.php?page=employee");
                     break;
                 case 'OWNER':
-                    header("Location: pages/admin/AdminRouter.php");
+                case 'ADMIN':
+                    header("Location: index.php?page=admin");
                     break;
+                case 'CUSTOMER':
                 default:
                     header("Location: index.php");
             }
-            exit; // จบการทำงานทันทีหลัง redirect
+            exit;
             
         } else {
             // ล็อกอินไม่สำเร็จ
@@ -96,7 +97,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $error = 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' . $e->getMessage();
     }
 }
-// (B) ส่วนแสดงผล (View) - เริ่ม HTML
+
+// ตรวจสอบ flash message
+$flash_message = $_SESSION['flash_message'] ?? null;
+if ($flash_message) {
+    unset($_SESSION['flash_message']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -105,7 +111,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>เข้าสู่ระบบ - Motorcycle Rental</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .loading {
             display: none;
@@ -142,13 +148,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <?php endif; ?>
 
                 <!-- แสดงข้อความจาก session ถ้ามี -->
-                <?php if (isset($_SESSION['flash_message'])): ?>
-                    <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center">
-                        <i data-lucide="check-circle" class="h-5 w-5 mr-2"></i>
-                        <?php 
-                            echo $_SESSION['flash_message']['message']; 
-                            unset($_SESSION['flash_message']);
-                        ?>
+                <?php if ($flash_message): ?>
+                    <div class="<?php echo $flash_message['type'] === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'; ?> px-4 py-3 rounded-lg flex items-center">
+                        <i data-lucide="<?php echo $flash_message['type'] === 'error' ? 'alert-circle' : 'check-circle'; ?>" class="h-5 w-5 mr-2"></i>
+                        <?php echo $flash_message['message']; ?>
                     </div>
                 <?php endif; ?>
 
@@ -235,26 +238,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </div>
 
-            <div class="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h3 class="text-sm font-medium text-gray-700 mb-2">บัญชีทดสอบ (API จริง):</h3>
-                <div class="text-xs text-gray-600 space-y-1">
-                    <p><strong>ลูกค้า:</strong> testuser@email.com / password123</p>
-                    <p><strong>แอดมิน:</strong> sompong@tempstation.com / password123</p>
-                    <p><strong>พนักงาน:</strong> somsak@tempstation.com / password123</p>
-                </div>
-                
-                <!-- ปุ่มทดสอบ API Connection -->
-                <div class="mt-3 pt-3 border-t border-gray-200">
-                    <button 
-                        type="button" 
-                        id="testApiBtn"
-                        class="w-full text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded transition-colors"
-                    >
-                        ทดสอบการเชื่อมต่อ API
-                    </button>
-                    <div id="apiStatus" class="text-xs mt-1 hidden"></div>
-                </div>
-            </div>
+          
         </div>
     </div>
 
@@ -291,40 +275,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             });
         }
 
-        // 4. ทดสอบการเชื่อมต่อ API
-        const testApiBtn = document.getElementById('testApiBtn');
-        const apiStatus = document.getElementById('apiStatus');
-
-        if (testApiBtn) {
-            testApiBtn.addEventListener('click', async function() {
-                testApiBtn.disabled = true;
-                testApiBtn.textContent = 'กำลังทดสอบ...';
-                apiStatus.className = 'text-xs mt-1 text-blue-600';
-                apiStatus.textContent = 'กำลังทดสอบการเชื่อมต่อ API...';
-                apiStatus.classList.remove('hidden');
-
-                try {
-                    const response = await fetch('api/config.php?test_api=1');
-                    const data = await response.json();
-                    
-                    if (data.api_connected) {
-                        apiStatus.className = 'text-xs mt-1 text-green-600';
-                        apiStatus.textContent = '✓ เชื่อมต่อ API สำเร็จ';
-                    } else {
-                        apiStatus.className = 'text-xs mt-1 text-red-600';
-                        apiStatus.textContent = '✗ ไม่สามารถเชื่อมต่อ API ได้';
-                    }
-                } catch (error) {
-                    apiStatus.className = 'text-xs mt-1 text-red-600';
-                    apiStatus.textContent = '✗ เกิดข้อผิดพลาด: ' + error.message;
-                } finally {
-                    testApiBtn.disabled = false;
-                    testApiBtn.textContent = 'ทดสอบการเชื่อมต่อ API';
-                }
-            });
-        }
-
-        // 5. Auto-focus ที่ input email
+        // 4. Auto-focus ที่ input email
         document.getElementById('email')?.focus();
     </script>
 </body>
