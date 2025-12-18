@@ -2,29 +2,49 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/uuid.php';
 
+
+
 class BookingService
 {
     /**
      * สร้างการจองใหม่
      */
-    public static function createBooking($data)
+    public static function createBooking(array $data)
     {
-        $db            = Database::connect();
-        $reservationId = gen_id('RES', 10);
-        $depositAmount = $data['depositAmount'] ?? round($data['totalPrice'] * 0.2, 2);
-
-        $sql = "
-            INSERT INTO reservations
-            (reservation_id, customer_id, motorcycle_id, start_date, end_date, total_days, total_price,
-            deposit_amount, discount_amount, final_price, pickup_location, return_location, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NOW())
-        ";
+        $db = Database::connect();
+        $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         try {
-            $stmt = $db->prepare($sql);
+            $db->beginTransaction();
+
+            $reservationId = gen_id('RES', 10);
+            $depositAmount = $data['depositAmount'] ?? round($data['finalPrice'] * 0.3, 2);
+
+            $stmt = $db->prepare("
+            INSERT INTO reservations
+            (
+                reservation_id,
+                customer_id,
+                employee_id,
+                motorcycle_id,
+                start_date,
+                end_date,
+                total_days,
+                total_price,
+                deposit_amount,
+                discount_amount,
+                final_price,
+                pickup_location,
+                return_location,
+                special_requests
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
             $stmt->execute([
                 $reservationId,
                 $data['customerId'],
+                $data['employeeId'] ?? null,
                 $data['motorcycleId'],
                 $data['startDate'],
                 $data['endDate'],
@@ -33,12 +53,17 @@ class BookingService
                 $depositAmount,
                 $data['discountAmount'] ?? 0,
                 $data['finalPrice'],
-                $data['pickupLocation'],
-                $data['returnLocation'],
+                $data['pickupLocation'] ?? null,
+                $data['returnLocation'] ?? null,
+                $data['specialRequests'] ?? null,
             ]);
+
+            $db->commit();
             return $reservationId;
-        } catch (PDOException $e) {
-            error_log("BookingService Error: " . $e->getMessage());
+
+        } catch (Exception $e) {
+            $db->rollBack();
+            error_log('BookingService::createBooking ' . $e->getMessage());
             throw $e;
         }
     }
@@ -50,7 +75,7 @@ class BookingService
     {
         $db   = Database::connect();
         $stmt = $db->prepare("
-            SELECT 
+            SELECT
                 r.reservation_id as reservationId,
                 r.customer_id as customerId,
                 r.motorcycle_id as motorcycleId,
@@ -87,7 +112,7 @@ class BookingService
     {
         $db   = Database::connect();
         $stmt = $db->prepare("
-            SELECT 
+            SELECT
                 r.reservation_id as reservationId,
                 r.customer_id as customerId,
                 r.motorcycle_id as motorcycleId,
@@ -123,7 +148,7 @@ class BookingService
     {
         $db   = Database::connect();
         $stmt = $db->prepare("
-            SELECT 
+            SELECT
                 r.reservation_id as reservationId,
                 r.customer_id as customerId,
                 r.motorcycle_id as motorcycleId,
