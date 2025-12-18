@@ -6,13 +6,36 @@ require_once __DIR__ . '/../config/uuid.php';
 
 class PaymentService
 {
-    /**
-     * สร้าง payment (เหมือน processPayment ใน Java)
-     * - ตรวจ reservation
-     * - กัน payment ซ้ำ
-     * - ใช้ราคาจาก DB
-     * - return payment object
-     */
+
+    public static function getPaymentsForUser(string $customerId): array
+    {
+        $db = Database::connect();
+
+        $stmt = $db->prepare("
+            SELECT p.*, r.customer_id
+            FROM payments p
+            JOIN reservations r ON p.reservation_id = r.reservation_id
+            WHERE r.customer_id = ?
+            ORDER BY p.created_at DESC
+        ");
+        $stmt->execute([$customerId]);
+
+        $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // map reservationId => payment
+        $paymentMap = [];
+        foreach ($payments as $payment) {
+            $rid = $payment['reservation_id'] ?? null;
+            if ($rid) {
+                $payment['status'] = $payment['payment_status']; // alias
+                $paymentMap[$rid]  = $payment;
+            }
+
+        }
+
+        return $paymentMap;
+    }
+
     public static function createPayment(array $data)
     {
         $db = Database::connect();
@@ -50,13 +73,14 @@ class PaymentService
 
         $stmt = $db->prepare("
             INSERT INTO payments
-            (payment_id, reservation_id, amount, payment_method, payment_status, created_at)
-            VALUES (?, ?, ?, ?, 'pending', NOW())
+            (payment_id, reservation_id, customer_id, amount, payment_method, payment_status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', NOW())
         ");
 
         $stmt->execute([
             $paymentId,
             $reservation['reservation_id'],
+            $reservation['customer_id'], // <-- เพิ่มตรงนี้
             $reservation['final_price'],
             $data['paymentMethod'],
         ]);

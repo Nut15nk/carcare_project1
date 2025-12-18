@@ -1,16 +1,18 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 
-class AuthService {
+class AuthService
+{
 
-    public static function login($email, $password) {
+    public static function login($email, $password)
+    {
         $db = Database::connect();
 
         // ลำดับการตรวจสอบ (ตามที่คุณกำหนด)
         $roles = [
             "customer" => "customers",
             "employee" => "employees",
-            "owner"    => "owners"
+            "owner"    => "owners",
         ];
 
         foreach ($roles as $role => $table) {
@@ -20,12 +22,12 @@ class AuthService {
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-            if (!$user) {
+            if (! $user) {
                 continue; // ข้ามไป table ถัดไป
             }
 
             // เจอ email แล้ว → ตรวจรหัสผ่าน
-            if (!password_verify($password, $user['password_hash'])) {
+            if (! password_verify($password, $user['password_hash'])) {
                 throw new Exception("รหัสผ่านไม่ถูกต้อง");
             }
 
@@ -42,4 +44,6 @@ class AuthService {
         // ถ้าเช็คครบทุก table แล้วยังไม่พบ email → ไม่พบผู้ใช้
         throw new Exception("ไม่พบผู้ใช้งาน");
     }
+
+
 }
