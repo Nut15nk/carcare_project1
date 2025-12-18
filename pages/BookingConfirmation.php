@@ -54,26 +54,46 @@
 
     // ตรวจสอบ payment
     $existingPayment = PaymentService::getPaymentByReservation($booking['reservationId']);
+
+    // --- กำหนดค่าสีและข้อความสำหรับการแสดงผล ---
+    if ($existingPayment) {
+        // กรณีชำระเงินแล้ว
+        $headerText = 'ชำระเงินสำเร็จ!';
+        $subText    = 'การชำระเงินของคุณเรียบร้อยแล้ว ขอบคุณที่ใช้บริการ';
+        $themeColor = 'green';
+        $iconName   = 'check-circle';
+        $statusText = 'ชำระเงินแล้ว';
+        $badgeClass = 'bg-green-100 text-green-800';
+        $iconBgClass = 'bg-green-100 text-green-600';
+    } else {
+        // กรณีรอชำระเงิน (เปลี่ยนจาก จองสำเร็จ เป็น รอชำระเงิน)
+        $headerText = 'รอชำระเงิน';
+        $subText    = 'กรุณาชำระเงินภายใน 24 ชั่วโมงเพื่อยืนยันการจอง';
+        $themeColor = 'yellow';
+        $iconName   = 'clock'; // เปลี่ยนไอคอนเป็นนาฬิกา
+        $statusText = 'รอชำระเงิน';
+        $badgeClass = 'bg-yellow-100 text-yellow-800'; // สีเหลืองตามที่ขอ
+        $iconBgClass = 'bg-yellow-100 text-yellow-600';
+    }
 ?>
 
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-8">
             <div class="flex justify-center mb-4">
-                <div class="bg-green-100 p-3 rounded-full">
-                    <i data-lucide="check-circle" class="h-12 w-12 text-green-600"></i>
+                <div class="<?= $existingPayment ? 'bg-green-100' : 'bg-yellow-100'; ?> p-3 rounded-full">
+                    <i data-lucide="<?= $iconName; ?>" class="h-12 w-12 <?= $existingPayment ? 'text-green-600' : 'text-yellow-600'; ?>"></i>
                 </div>
             </div>
             <h1 class="text-3xl font-bold text-gray-900 mb-2">
-                <?php echo $existingPayment ? 'ชำระเงินสำเร็จ!' : 'จองสำเร็จ!'; ?>
+                <?= $headerText; ?>
             </h1>
             <p class="text-lg text-gray-600">
-                <?php echo $existingPayment ? 'การชำระเงินของคุณสำเร็จแล้ว' : 'การจองรถจักรยานยนต์ของคุณสำเร็จแล้ว'; ?>
+                <?= $subText; ?>
             </p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Booking Details -->
             <div class="lg:col-span-2">
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <h2 class="text-xl font-bold text-gray-900 mb-4">รายละเอียดการจอง</h2>
@@ -83,12 +103,12 @@
                                 <p class="text-sm text-gray-600">รหัสการจอง</p>
                                 <p class="font-semibold text-lg"><?php echo $booking['reservationId']; ?></p>
                             </div>
-                            <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                                <?php echo $existingPayment ? 'ชำระเงินแล้ว' : 'รอชำระเงิน'; ?>
+                            
+                            <span class="<?= $badgeClass; ?> px-3 py-1 rounded-full text-sm font-medium">
+                                <?= $statusText; ?>
                             </span>
                         </div>
 
-                        <!-- Motorcycle Info -->
                         <div class="border-t pt-4">
                             <h3 class="font-semibold text-gray-900 mb-2">ข้อมูลรถ</h3>
                             <div class="flex items-center gap-4">
@@ -103,7 +123,6 @@
                             </div>
                         </div>
 
-                        <!-- Dates & Locations -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <p class="text-sm text-gray-600">วันที่รับรถ</p>
@@ -119,7 +138,6 @@
                             </div>
                         </div>
 
-                        <!-- Price -->
                         <div class="border-t pt-4">
                             <h3 class="font-semibold text-gray-900 mb-3">สรุปราคา</h3>
                             <div class="space-y-2">
@@ -147,7 +165,6 @@
                 </div>
             </div>
 
-            <!-- Action Panel -->
             <div class="space-y-4">
                 <?php if (! $existingPayment): ?>
                 <div class="bg-white rounded-lg shadow-lg p-6">

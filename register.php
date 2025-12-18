@@ -38,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     } else {
         // โหลดไฟล์ API ด้วย path ที่ถูกต้อง
-        $configFile = __DIR__ . '/api/config.php';
-        $authFile = __DIR__ . '/api/auth.php';
+        $configFile = __DIR__ . '/config/config.php';
+        $authFile = __DIR__ . '/service/AuthService.php';
         
         error_log("Looking for config.php at: " . $configFile);
         error_log("Looking for auth.php at: " . $authFile);
@@ -66,8 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'lastName' => explode(' ', $name)[1] ?? '',
                     'phone' => $phone,
                     'address' => $lineId ? "Line ID: {$lineId}" : '',
-                    'licenseNumber' => 'PENDING', // ต้องอัพเดททีหลัง
-                    'idCardNumber' => 'PENDING' // ต้องอัพเดททีหลัง
                 ];
                 
                 error_log("Attempting register with data: " . print_r($userData, true));
