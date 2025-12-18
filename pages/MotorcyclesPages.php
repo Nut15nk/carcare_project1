@@ -1,159 +1,86 @@
 <?php
 // pages/MotorcyclesPages.php
 
-// ตรวจสอบว่าไฟล์ config อยู่ที่ไหน
-$configPaths = [
-    __DIR__ . '/../api/config.php',
-    __DIR__ . '/../../api/config.php', 
-    'api/config.php'
-];
+// 1️⃣ Include config และ Service ใหม่
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../service/MotorcycleService.php';
 
-$configLoaded = false;
-foreach ($configPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $configLoaded = true;
-        break;
-    }
-}
+// 2️⃣ รับค่าตัวกรองจาก URL
+$searchTerm     = $_GET['search'] ?? '';
+$selectedBrand  = $_GET['brand'] ?? '';
+$selectedType   = $_GET['type'] ?? '';
+$priceRangeMin  = (int)($_GET['min_price'] ?? 0);
+$priceRangeMax  = (int)($_GET['max_price'] ?? 1000);
+$startDate      = $_GET['start_date'] ?? '';
+$endDate        = $_GET['end_date'] ?? '';
 
-if (!$configLoaded) {
-    die('ไม่พบไฟล์ config.php');
-}
-
-// โหลด motorcycles.php
-$motorcyclePaths = [
-    __DIR__ . '/../api/motorcycles.php',
-    __DIR__ . '/../../api/motorcycles.php',
-    'api/motorcycles.php'
-];
-
-$motorcycleLoaded = false;
-foreach ($motorcyclePaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $motorcycleLoaded = true;
-        break;
-    }
-}
-
-if (!$motorcycleLoaded) {
-    die('ไม่พบไฟล์ motorcycles.php');
-}
-
-// รับค่าตัวกรอง
-$searchTerm = $_GET['search'] ?? '';
-$selectedBrand = $_GET['brand'] ?? '';
-$selectedType = $_GET['type'] ?? '';
-$priceRangeMin = (int)($_GET['min_price'] ?? 0);
-$priceRangeMax = (int)($_GET['max_price'] ?? 1000);
-$startDate = $_GET['start_date'] ?? '';
-$endDate = $_GET['end_date'] ?? '';
-
-// ดึงข้อมูลจาก API
+// 3️⃣ ดึงข้อมูลจาก Service ใหม่
 try {
-    error_log("กำลังดึงข้อมูลรถจาก API...");
-    
-    if ($startDate && $endDate) {
-        $motorcycles_data = MotorcycleService::getAvailableMotorcycles($startDate, $endDate);
-        error_log("เรียก getAvailableMotorcycles: " . count($motorcycles_data) . " คัน");
-    } else {
-        $motorcycles_data = MotorcycleService::getAllMotorcycles();
-        error_log("เรียก getAllMotorcycles: " . count($motorcycles_data) . " คัน");
-    }
-    
-    // ถ้าได้ข้อมูลเป็น null ให้ตั้งค่าเป็น array ว่าง
-    if ($motorcycles_data === null) {
-        $motorcycles_data = [];
-        error_log("API returned null, setting to empty array");
-    }
-    
+    $filters = [
+        'brand' => $selectedBrand,
+        'model' => $searchTerm,
+        'minPrice' => $priceRangeMin,
+        'maxPrice' => $priceRangeMax,
+        'type' => $selectedType
+    ];
+
+    $motorcycles_data = MotorcycleService::searchMotorcycles($filters, $startDate, $endDate);
+
+    if (!is_array($motorcycles_data)) $motorcycles_data = [];
+
 } catch (Exception $e) {
     $motorcycles_data = [];
     $error_message = "ไม่สามารถโหลดข้อมูลรถได้: " . $e->getMessage();
-    error_log("Error in MotorcyclesPages: " . $e->getMessage());
 }
 
-// ตรวจสอบว่า $motorcycles_data เป็น array
-if (!is_array($motorcycles_data)) {
-    $motorcycles_data = [];
-    error_log("motorcycles_data is not array, setting to empty");
-}
+// 4️⃣ กรองข้อมูลเพิ่มเติมหน้าเว็บ (ถ้าต้องการ)
+$filteredMotorcycles = array_filter($motorcycles_data, function($bike) use ($searchTerm, $selectedBrand, $selectedType, $priceRangeMin, $priceRangeMax) {
+    if ($searchTerm) {
+        $term = strtolower($searchTerm);
+        $brandModel = strtolower(($bike['brand'] ?? '') . ' ' . ($bike['model'] ?? ''));
+        if (!str_contains($brandModel, $term)) return false;
+    }
+    if ($selectedBrand && ($bike['brand'] ?? '') !== $selectedBrand) return false;
+    if ($selectedType) {
+        $cc = $bike['engineCc'] ?? 0;
+        $typeMatch = false;
+        if ($selectedType === 'small' && $cc <= 150) $typeMatch = true;
+        if ($selectedType === 'medium' && $cc > 150 && $cc <= 300) $typeMatch = true;
+        if ($selectedType === 'large' && $cc > 300) $typeMatch = true;
+        if (!$typeMatch) return false;
+    }
+    $price = $bike['pricePerDay'] ?? 0;
+    if ($price < $priceRangeMin || $price > $priceRangeMax) return false;
+    return true;
+});
 
-// กรองข้อมูล
-$filteredMotorcycles = $motorcycles_data;
-
-// ฟังก์ชันกรองข้อมูลแบบรวม
-if ($searchTerm || $selectedBrand || $selectedType || $priceRangeMin > 0 || $priceRangeMax < 1000) {
-    $filteredMotorcycles = array_filter($filteredMotorcycles, function($bike) use ($searchTerm, $selectedBrand, $selectedType, $priceRangeMin, $priceRangeMax) {
-        // 1. กรองตามคำค้นหา
-        if ($searchTerm) {
-            $term = strtolower($searchTerm);
-            $brandModel = strtolower(($bike['brand'] ?? '') . ' ' . ($bike['model'] ?? ''));
-            if (!str_contains($brandModel, $term)) {
-                return false;
-            }
-        }
-        
-        // 2. กรองตามยี่ห้อ
-        if ($selectedBrand && ($bike['brand'] ?? '') !== $selectedBrand) {
-            return false;
-        }
-        
-        // 3. กรองตามประเภท
-        if ($selectedType) {
-            $engineCc = $bike['engineCc'] ?? 0;
-            $typeMatch = false;
-            if ($selectedType === 'small' && $engineCc <= 150) $typeMatch = true;
-            if ($selectedType === 'medium' && $engineCc > 150 && $engineCc <= 300) $typeMatch = true;
-            if ($selectedType === 'large' && $engineCc > 300) $typeMatch = true;
-            
-            if (!$typeMatch) return false;
-        }
-        
-        // 4. กรองตามราคา
-        $price = $bike['pricePerDay'] ?? 0;
-        if ($price < $priceRangeMin || $price > $priceRangeMax) {
-            return false;
-        }
-        
-        return true;
-    });
-}
-
-// เตรียมข้อมูลสำหรับ Dropdowns
-$brands = [];
-if (!empty($motorcycles_data)) {
-    $brands = array_unique(array_column($motorcycles_data, 'brand'));
-}
+// 5️⃣ เตรียม Dropdowns
+$brands = !empty($motorcycles_data) ? array_unique(array_column($motorcycles_data, 'brand')) : [];
 $types = [
-    'small' => 'เล็ก (≤ 150cc)',
-    'medium' => 'กลาง (151-300cc)', 
-    'large' => 'ใหญ่ (> 300cc)'
+    'small'  => 'เล็ก (≤ 150cc)',
+    'medium' => 'กลาง (151-300cc)',
+    'large'  => 'ใหญ่ (> 300cc)'
 ];
 
-// คำนวณโปรโมชั่น
+// 6️⃣ โปรโมชั่นตัวอย่าง
 function calculateDiscount($days, $pricePerDay) {
     $normalPrice = $days * $pricePerDay;
-    $discount = 0;
-    if ($days >= 3) {
-        $discount = floor($days / 3) * 50;
-    }
+    $discount = ($days >= 3) ? floor($days / 3) * 50 : 0;
     return [
         'normalPrice' => $normalPrice,
-        'finalPrice' => $normalPrice - $discount,
-        'discount' => $discount
+        'finalPrice'  => $normalPrice - $discount,
+        'discount'    => $discount
     ];
 }
 
-// กำหนดค่าเริ่มต้นสำหรับโปรโมชั่น
 $promoDays = 3;
 $promoPricePerDay = 650;
 $promoData = calculateDiscount($promoDays, $promoPricePerDay);
 
-// Base64 encoded placeholder image (1x1 pixel transparent PNG)
+// 7️⃣ Base64 placeholder image
 $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 ?>
+
 
 <div class="min-h-screen bg-gray-50">
     <!-- Hero Section -->
@@ -302,6 +229,7 @@ $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
             </div>
         </form>
 
+
         <!-- Results Summary -->
         <div class="mb-6">
             <p class="text-gray-600">
@@ -366,8 +294,6 @@ $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
                                 <?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>
                             </h3>
                             <div class="flex items-center">
-                                <i data-lucide="star" class="h-4 w-4 text-yellow-400 fill-current"></i>
-                                <span class="text-sm text-gray-600 ml-1">4.8</span>
                             </div>
                         </div>
                         <div class="flex items-center gap-4 text-sm text-gray-600 mb-4">

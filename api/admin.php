@@ -1,675 +1,262 @@
 <?php
-// api/admin.php
 require_once 'config.php';
 
 class AdminService {
-    
-    /**
-     * Get dashboard statistics from Spring Boot API - FIXED
-     */
+
     public static function getDashboardStats() {
-        try {
-            // ตรวจสอบ session และ token
-            if (!isset($_SESSION['user']['token'])) {
-                error_log("No token in session for getDashboardStats");
-                return self::getFallbackStats();
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            // ส่ง token เป็น parameter ที่ 4 แทน headers
-            $response = ApiConfig::makeApiCall('/admin/dashboard/stats', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            
-            error_log("Dashboard stats API failed with status: " . $response['status']);
-            return self::getFallbackStats();
-            
-        } catch (Exception $e) {
-            error_log("AdminService getDashboardStats Error: " . $e->getMessage());
-            return self::getFallbackStats();
-        }
+        $db = Database::connect();
+        $stats = [];
+
+        $stats['totalBookings'] = $db->query("SELECT COUNT(*) FROM reservations")->fetchColumn();
+        $stats['pendingBookings'] = $db->query("SELECT COUNT(*) FROM reservations WHERE status='PENDING'")->fetchColumn();
+        $stats['activeBookings'] = $db->query("SELECT COUNT(*) FROM reservations WHERE status='ACTIVE'")->fetchColumn();
+        $stats['totalRevenue'] = $db->query("SELECT SUM(amount) FROM payments WHERE status='CONFIRMED'")->fetchColumn();
+        $stats['availableMotorcycles'] = $db->query("SELECT COUNT(*) FROM motorcycles WHERE status='AVAILABLE'")->fetchColumn();
+
+        return $stats;
     }
-    
-    /**
-     * Get all reservations from Spring Boot API - FIXED
-     */
+
     public static function getAllReservations() {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                error_log("No token in session for getAllReservations");
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            // ใช้ endpoint ที่ถูกต้องและส่ง token เป็น parameter
-            $response = ApiConfig::makeApiCall('/admin/bookings', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            
-            error_log("Reservations API failed with status: " . $response['status']);
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getAllReservations Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        $stmt = $db->query("
+            SELECT r.*, u.first_name, u.last_name, m.brand, m.model 
+            FROM reservations r
+            INNER JOIN users u ON r.customer_id = u.id
+            INNER JOIN motorcycles m ON r.motorcycle_id = m.id
+            ORDER BY r.created_at DESC
+        ");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Get all customers from Spring Boot API - FIXED
-     */
+
     public static function getAllCustomers() {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/customers', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getAllCustomers Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        $stmt = $db->query("SELECT id, first_name, last_name, email, phone, role FROM users WHERE role='CUSTOMER'");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Get all employees from Spring Boot API - FIXED
-     */
+
     public static function getAllEmployees() {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/employees', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getAllEmployees Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        $stmt = $db->query("SELECT id, first_name, last_name, email, phone, role FROM users WHERE role='EMPLOYEE'");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Update reservation status - FIXED
-     */
+
     public static function updateReservationStatus($reservationId, $status) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/reservations/{$reservationId}/status?status={$status}", 
-                'PUT', 
-                null, 
-                $token
-            );
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateReservationStatus Error: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Get revenue report - FIXED
-     */
-    public static function getRevenueReport($period = 'monthly') {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/dashboard/revenue-report?period={$period}", 
-                'GET', 
-                null, 
-                $token
-            );
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getRevenueReport Error: " . $e->getMessage());
-            return [];
-        }
-    }
-    
-    /**
-     * Get recent activities - FIXED
-     */
-    public static function getRecentActivities($limit = 10) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/dashboard/recent-activities?limit={$limit}", 
-                'GET', 
-                null, 
-                $token
-            );
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getRecentActivities Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        $stmt = $db->prepare("UPDATE reservations SET status = ? WHERE id = ?");
+        return $stmt->execute([$status, $reservationId]);
     }
 
-    // ===== ฟังก์ชันใหม่ที่เพิ่ม =====
+    public static function getRevenueReport($period) {
+        $db = Database::connect();
+        $sql = "";
 
-    /**
-     * Create new employee - FIXED
-     */
-    public static function createEmployee($employeeData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/employees', 'POST', $employeeData, $token);
-            
-            return $response['status'] === 201 || $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService createEmployee Error: " . $e->getMessage());
-            return false;
+        if ($period === 'daily') {
+            $sql = "SELECT DATE(created_at) AS date, SUM(amount) AS total FROM payments WHERE status='CONFIRMED' GROUP BY DATE(created_at)";
+        } elseif ($period === 'yearly') {
+            $sql = "SELECT YEAR(created_at) AS date, SUM(amount) AS total FROM payments WHERE status='CONFIRMED' GROUP BY YEAR(created_at)";
+        } else {
+            $sql = "SELECT DATE_FORMAT(created_at,'%Y-%m') AS date, SUM(amount) AS total FROM payments WHERE status='CONFIRMED' GROUP BY DATE_FORMAT(created_at,'%Y-%m')";
         }
-    }
-    
-    /**
-     * Update employee - FIXED
-     */
-    public static function updateEmployee($employeeId, $employeeData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/employees/{$employeeId}", 'PUT', $employeeData, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateEmployee Error: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Delete employee - FIXED
-     */
-    public static function deleteEmployee($employeeId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/employees/{$employeeId}", 'DELETE', null, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService deleteEmployee Error: " . $e->getMessage());
-            return false;
-        }
+
+        return $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Update payment status - FIXED
-     */
+    public static function getRecentActivities($limit) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            SELECT 'booking' AS type, id, created_at FROM reservations
+            UNION
+            SELECT 'payment' AS type, id, created_at FROM payments
+            ORDER BY created_at DESC
+            LIMIT ?
+        ");
+        $stmt->execute([$limit]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public static function createEmployee($data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            INSERT INTO users (first_name, last_name, email, password, phone, role)
+            VALUES (?, ?, ?, ?, ?, 'EMPLOYEE')
+        ");
+        return $stmt->execute([
+            $data['firstName'],
+            $data['lastName'],
+            $data['email'],
+            password_hash($data['password'], PASSWORD_BCRYPT),
+            $data['phone']
+        ]);
+    }
+
+    public static function updateEmployee($id, $data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            UPDATE users SET first_name=?, last_name=?, phone=? WHERE id=?
+        ");
+        return $stmt->execute([
+            $data['firstName'],
+            $data['lastName'],
+            $data['phone'],
+            $id
+        ]);
+    }
+
+    public static function deleteEmployee($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("DELETE FROM users WHERE id=? AND role='EMPLOYEE'");
+        return $stmt->execute([$id]);
+    }
+
     public static function updatePaymentStatus($reservationId, $status) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/payments/{$reservationId}/status?status={$status}", 
-                'PUT', 
-                null, 
-                $token
-            );
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updatePaymentStatus Error: " . $e->getMessage());
-            return false;
-        }
+        $db = Database::connect();
+        $stmt = $db->prepare("UPDATE payments SET status=? WHERE reservation_id=?");
+        return $stmt->execute([$status, $reservationId]);
     }
 
-    /**
-     * Get all motorcycles for admin - FIXED
-     */
     public static function getAllMotorcycles() {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/motorcycles', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getAllMotorcycles Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        return $db->query("SELECT * FROM motorcycles")->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Create new motorcycle - FIXED
-     */
-    public static function createMotorcycle($motorcycleData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/motorcycles', 'POST', $motorcycleData, $token);
-            
-            return $response['status'] === 201 || $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService createMotorcycle Error: " . $e->getMessage());
-            return false;
-        }
+    public static function createMotorcycle($data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            INSERT INTO motorcycles (brand, model, price_per_day, status, image)
+            VALUES (?, ?, ?, 'AVAILABLE', ?)
+        ");
+        return $stmt->execute([
+            $data['brand'],
+            $data['model'],
+            $data['pricePerDay'],
+            $data['image']
+        ]);
     }
 
-    /**
-     * Update motorcycle - FIXED
-     */
-    public static function updateMotorcycle($motorcycleId, $motorcycleData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'PUT', $motorcycleData, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateMotorcycle Error: " . $e->getMessage());
-            return false;
-        }
+    public static function updateMotorcycle($id, $data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            UPDATE motorcycles SET brand=?, model=?, price_per_day=?, status=? WHERE id=?
+        ");
+        return $stmt->execute([
+            $data['brand'],
+            $data['model'],
+            $data['pricePerDay'],
+            $data['status'],
+            $id
+        ]);
     }
 
-    /**
-     * Delete motorcycle - FIXED
-     */
-    public static function deleteMotorcycle($motorcycleId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'DELETE', null, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService deleteMotorcycle Error: " . $e->getMessage());
-            return false;
-        }
+    public static function deleteMotorcycle($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("DELETE FROM motorcycles WHERE id=?");
+        return $stmt->execute([$id]);
     }
 
-    /**
-     * Get all discounts - FIXED
-     */
     public static function getAllDiscounts() {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/discounts', 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getAllDiscounts Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        return $db->query("SELECT * FROM discounts")->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Create new discount - FIXED
-     */
-    public static function createDiscount($discountData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall('/admin/discounts', 'POST', $discountData, $token);
-            
-            return $response['status'] === 201 || $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService createDiscount Error: " . $e->getMessage());
-            return false;
-        }
+    public static function createDiscount($data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            INSERT INTO discounts (code, percent, active)
+            VALUES (?, ?, ?)
+        ");
+        return $stmt->execute([
+            $data['code'],
+            $data['percent'],
+            $data['active']
+        ]);
     }
 
-    /**
-     * Update discount - FIXED
-     */
-    public static function updateDiscount($discountId, $discountData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'PUT', $discountData, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateDiscount Error: " . $e->getMessage());
-            return false;
-        }
+    public static function updateDiscount($id, $data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            UPDATE discounts SET code=?, percent=?, active=? WHERE id=?
+        ");
+        return $stmt->execute([
+            $data['code'],
+            $data['percent'],
+            $data['active'],
+            $id
+        ]);
     }
 
-    /**
-     * Delete discount - FIXED
-     */
-    public static function deleteDiscount($discountId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'DELETE', null, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService deleteDiscount Error: " . $e->getMessage());
-            return false;
-        }
+    public static function deleteDiscount($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("DELETE FROM discounts WHERE id=?");
+        return $stmt->execute([$id]);
     }
 
-    /**
-     * Get payment details - FIXED
-     */
     public static function getPaymentDetails($reservationId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/payments/{$reservationId}", 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getPaymentDetails Error: " . $e->getMessage());
-            return [];
-        }
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM payments WHERE reservation_id = ?");
+        $stmt->execute([$reservationId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Get customer details - FIXED
-     */
-    public static function getCustomerDetails($customerId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/customers/{$customerId}", 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getCustomerDetails Error: " . $e->getMessage());
-            return [];
-        }
+    public static function getCustomerDetails($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT id, first_name, last_name, email, phone FROM users WHERE id=?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Update customer status - FIXED
-     */
-    public static function updateCustomerStatus($customerId, $status) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/customers/{$customerId}/status?status={$status}", 
-                'PUT', 
-                null, 
-                $token
-            );
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateCustomerStatus Error: " . $e->getMessage());
-            return false;
-        }
+    public static function updateCustomerStatus($id, $status) {
+        $db = Database::connect();
+        $stmt = $db->prepare("UPDATE users SET active=? WHERE id=? AND role='CUSTOMER'");
+        return $stmt->execute([$status, $id]);
     }
 
-    /**
-     * Get reservation details - FIXED
-     */
-    public static function getReservationDetails($reservationId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/reservations/{$reservationId}", 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getReservationDetails Error: " . $e->getMessage());
-            return [];
-        }
+    public static function getReservationDetails($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("
+            SELECT r.*, m.brand, m.model, u.first_name, u.last_name
+            FROM reservations r
+            INNER JOIN motorcycles m ON r.motorcycle_id = m.id
+            INNER JOIN users u ON r.customer_id = u.id
+            WHERE r.id=?
+        ");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Get motorcycle details - FIXED
-     */
-    public static function getMotorcycleDetails($motorcycleId) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}", 'GET', null, $token);
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getMotorcycleDetails Error: " . $e->getMessage());
-            return [];
-        }
+    public static function getMotorcycleDetails($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM motorcycles WHERE id=?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Update motorcycle status - FIXED
-     */
-    public static function updateMotorcycleStatus($motorcycleId, $statusData) {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return false;
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall("/admin/motorcycles/{$motorcycleId}/status", 'PUT', $statusData, $token);
-            
-            return $response['status'] === 200;
-            
-        } catch (Exception $e) {
-            error_log("AdminService updateMotorcycleStatus Error: " . $e->getMessage());
-            return false;
-        }
+    public static function updateMotorcycleStatus($id, $data) {
+        $db = Database::connect();
+        $stmt = $db->prepare("UPDATE motorcycles SET status=? WHERE id=?");
+        return $stmt->execute([$data['status'], $id]);
     }
 
-    /**
-     * Get system analytics - FIXED
-     */
-    public static function getSystemAnalytics($period = 'monthly') {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/dashboard/analytics?period={$period}", 
-                'GET', 
-                null, 
-                $token
-            );
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService getSystemAnalytics Error: " . $e->getMessage());
-            return [];
-        }
+    public static function getSystemAnalytics($period) {
+        $db = Database::connect();
+        $sql = "
+            SELECT DATE(created_at) AS date,
+            COUNT(*) AS bookings,
+            (SELECT COUNT(*) FROM payments WHERE DATE(payments.created_at)=DATE(reservations.created_at)) AS payments
+            FROM reservations
+            GROUP BY DATE(created_at)
+        ";
+        return $db->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Export reports - FIXED
-     */
-    public static function exportReports($reportType, $format = 'csv') {
-        try {
-            if (!isset($_SESSION['user']['token'])) {
-                return [];
-            }
-            
-            $token = $_SESSION['user']['token'];
-            
-            $response = ApiConfig::makeApiCall(
-                "/admin/reports/export?type={$reportType}&format={$format}", 
-                'GET', 
-                null, 
-                $token
-            );
-            
-            if ($response['status'] === 200 && isset($response['data']['data'])) {
-                return $response['data']['data'];
-            }
-            return [];
-            
-        } catch (Exception $e) {
-            error_log("AdminService exportReports Error: " . $e->getMessage());
-            return [];
+    public static function exportReports($type, $format) {
+        $db = Database::connect();
+
+        if ($type === 'payments') {
+            $stmt = $db->query("SELECT * FROM payments");
+        } else {
+            $stmt = $db->query("SELECT * FROM reservations");
         }
-    }
-    
-    /**
-     * Fallback stats when API fails
-     */
-    private static function getFallbackStats() {
-        return [
-            'totalBookings' => 0,
-            'pendingBookings' => 0,
-            'activeBookings' => 0,
-            'totalRevenue' => 0,
-            'availableMotorcycles' => 0
-        ];
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
-?>

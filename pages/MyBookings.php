@@ -1,112 +1,58 @@
 <?php
-session_start();
+// pages/MyBookings.php
 
-// ตรวจสอบการล็อกอิน
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 if (!isset($_SESSION['user'])) {
     header("Location: login.php");
     exit;
 }
 
-// โหลดไฟล์ API - ใช้ระบบ path array
-$configPaths = [
-    __DIR__ . '/../api/config.php',
-    __DIR__ . '/../../api/config.php',
-    'api/config.php',
-];
-
-$configLoaded = false;
-foreach ($configPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $configLoaded = true;
-        break;
-    }
-}
-
-if (!$configLoaded) {
-    die('ไม่พบไฟล์ config.php');
-}
-
-// โหลด bookings.php
-$bookingPaths = [
-    __DIR__ . '/../api/bookings.php',
-    __DIR__ . '/../../api/bookings.php',
-    'api/bookings.php',
-];
-
-$bookingLoaded = false;
-foreach ($bookingPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $bookingLoaded = true;
-        break;
-    }
-}
-
-if (!$bookingLoaded) {
-    die('ไม่พบไฟล์ bookings.php');
-}
-
-// โหลด payments.php
-$paymentPaths = [
-    __DIR__ . '/../api/payments.php',
-    __DIR__ . '/../../api/payments.php',
-    'api/payments.php',
-];
-
-$paymentLoaded = false;
-foreach ($paymentPaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $paymentLoaded = true;
-        break;
-    }
-}
-
-if (!$paymentLoaded) {
-    die('ไม่พบไฟล์ payments.php');
-}
+// โหลด Services
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../service/BookingService.php';
+require_once __DIR__ . '/../service/PaymentService.php';
+require_once __DIR__ . '/../service/MotorcycleService.php';
 
 $customerId = $_SESSION['user']['userId'] ?? $_SESSION['user_id'] ?? '';
 $bookings = [];
-$payments = [];
+$paymentMap = [];
 
 if ($customerId) {
+    // ดึงการจองของลูกค้า
     $bookings = BookingService::getCustomerBookings($customerId);
-    
-    // ✅ แก้ไข: ดึงข้อมูล payment สำหรับแต่ละ booking
-    $paymentMap = [];
+
+    // ดึง payment สำหรับแต่ละ booking
     foreach ($bookings as $booking) {
-        $reservationId = $booking['reservationId'];
-        $payment = PaymentService::getPaymentByReservation($reservationId);
-        
-        // ✅ เพิ่ม debugging
-        error_log("Checking payment for reservation: " . $reservationId);
-        error_log("Payment data: " . print_r($payment, true));
-        
-        if ($payment) {
-            $paymentMap[$reservationId] = $payment;
+        $reservationId = $booking['reservationId'] ?? null;
+        if ($reservationId) {
+            $payment = PaymentService::getPaymentByReservation($reservationId);
+            if ($payment) {
+                $paymentMap[$reservationId] = $payment;
+            }
         }
     }
 }
 
-// เรียงการจองใหม่ล่าสุดขึ้นก่อน
+// เรียงการจองล่าสุดขึ้นก่อน
 usort($bookings, function ($a, $b) {
     return strtotime($b['createdAt'] ?? '') - strtotime($a['createdAt'] ?? '');
 });
+
+$flash_message = $_SESSION['flash_message'] ?? null;
+if ($flash_message) {
+    unset($_SESSION['flash_message']);
+}
 ?>
 
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-
-        <!-- Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 mb-2">การจองของฉัน</h1>
-            <p class="text-lg text-gray-600">จัดการการจองรถจักรยานยนต์ทั้งหมดของคุณ</p>
-        </div>
+        <h1 class="text-3xl font-bold text-gray-900 mb-4">การจองของฉัน</h1>
+        <p class="text-lg text-gray-600 mb-6">จัดการการจองรถจักรยานยนต์ทั้งหมดของคุณ</p>
 
         <?php if (empty($bookings)): ?>
-            <!-- Empty State -->
             <div class="bg-white rounded-lg shadow-lg p-8 text-center">
                 <div class="flex justify-center mb-4">
                     <i data-lucide="calendar" class="h-16 w-16 text-gray-400"></i>
@@ -120,116 +66,106 @@ usort($bookings, function ($a, $b) {
                 </a>
             </div>
         <?php else: ?>
-            <!-- Bookings List -->
-            <div class="space-y-6">
+            <div class="space-y-4">
                 <?php foreach ($bookings as $booking):
                     $payment = $paymentMap[$booking['reservationId']] ?? null;
-                    $startDate = new DateTime($booking['startDate']);
-                    $endDate = new DateTime($booking['endDate']);
-                    $totalDays = $endDate->diff($startDate)->days;
 
-                    // ✅ กำหนดสถานะตาม payment status
-                    if ($payment) {
-                        $status = 'paid';
-                        $statusText = 'ชำระเงินแล้ว';
-                        $statusColor = 'bg-green-100 text-green-800';
-                    } else {
-                        $status = 'pending';
-                        $statusText = 'รอชำระเงิน';
-                        $statusColor = 'bg-yellow-100 text-yellow-800';
-                    }
+                    // วันที่
+                    $startDate = !empty($booking['startDate']) ? new DateTime($booking['startDate']) : null;
+                    $endDate   = !empty($booking['endDate']) ? new DateTime($booking['endDate']) : null;
+                    $totalDays = ($startDate && $endDate) ? $endDate->diff($startDate)->days : 0;
+
+                    // สถานะ
+                    $statusText  = $payment ? 'ชำระเงินแล้ว' : 'รอชำระเงิน';
+                    $statusColor = $payment ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800';
+                    $statusIcon  = $payment ? 'check-circle' : 'clock';
                 ?>
                 <div class="bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-
-                        <!-- Booking Info -->
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div class="flex-1">
-                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+                            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
                                 <div>
                                     <h3 class="font-semibold text-lg text-gray-900">
-                                        รถจักรยานยนต์ #<?php echo htmlspecialchars($booking['motorcycleId'] ?? 'N/A'); ?>
+                                        รถจักรยานยนต์ #<?= htmlspecialchars($booking['motorcycleId'] ?? 'N/A'); ?>
                                     </h3>
-                                    <p class="text-sm text-gray-600">รหัสการจอง: <?php echo $booking['reservationId']; ?></p>
+                                    <p class="text-sm text-gray-600">รหัสการจอง: <?= $booking['reservationId'] ?? 'N/A'; ?></p>
                                 </div>
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium <?php echo $statusColor; ?>">
-                                    <?php echo $statusText; ?>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium <?= $statusColor; ?>">
+                                    <i data-lucide="<?= $statusIcon; ?>" class="h-4 w-4 mr-1"></i><?= $statusText; ?>
                                 </span>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                 <div>
-                                    <p class="text-gray-600">วันที่รับ</p>
-                                    <p class="font-semibold"><?php echo date('d/m/Y', strtotime($booking['startDate'])); ?></p>
+                                    <p class="text-gray-600">📅 วันที่รับ</p>
+                                    <p class="font-semibold"><?= $startDate ? $startDate->format('d/m/Y') : '-'; ?></p>
                                 </div>
                                 <div>
-                                    <p class="text-gray-600">วันที่คืน</p>
-                                    <p class="font-semibold"><?php echo date('d/m/Y', strtotime($booking['endDate'])); ?></p>
+                                    <p class="text-gray-600">📅 วันที่คืน</p>
+                                    <p class="font-semibold"><?= $endDate ? $endDate->format('d/m/Y') : '-'; ?></p>
                                 </div>
                                 <div>
-                                    <p class="text-gray-600">จำนวนวัน</p>
-                                    <p class="font-semibold"><?php echo $totalDays; ?> วัน</p>
+                                    <p class="text-gray-600">⏱️ จำนวนวัน</p>
+                                    <p class="font-semibold"><?= $totalDays; ?> วัน</p>
                                 </div>
                                 <div>
-                                    <p class="text-gray-600">ราคารวม</p>
-                                    <p class="font-semibold text-blue-600">฿<?php echo number_format($booking['finalPrice'] ?? $booking['totalPrice'] ?? 0); ?></p>
+                                    <p class="text-gray-600">💰 ราคารวม</p>
+                                    <p class="font-semibold text-blue-600">฿<?= number_format($booking['finalPrice'] ?? $booking['totalPrice'] ?? 0); ?></p>
                                 </div>
                             </div>
 
-                            <!-- ✅ เพิ่มสถานที่รับรถ -->
-                            <?php if ($booking['pickupLocation']): ?>
+                            <?php if (!empty($booking['pickupLocation'])): ?>
                             <div class="mt-3">
-                                <p class="text-sm text-gray-600">สถานที่รับรถ</p>
-                                <p class="font-semibold text-sm"><?php echo htmlspecialchars($booking['pickupLocation']); ?></p>
+                                <p class="text-sm text-gray-600">📍 สถานที่รับรถ</p>
+                                <p class="font-semibold text-sm"><?= htmlspecialchars($booking['pickupLocation']); ?></p>
                             </div>
                             <?php endif; ?>
 
-                            <!-- ✅ สถานที่คืนรถ (ของเดิม) -->
-                            <?php if ($booking['returnLocation']): ?>
+                            <?php if (!empty($booking['returnLocation'])): ?>
                             <div class="mt-3">
-                                <p class="text-sm text-gray-600">สถานที่คืนรถ</p>
-                                <p class="font-semibold text-sm"><?php echo htmlspecialchars($booking['returnLocation']); ?></p>
+                                <p class="text-sm text-gray-600">📍 สถานที่คืนรถ</p>
+                                <p class="font-semibold text-sm"><?= htmlspecialchars($booking['returnLocation']); ?></p>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($payment): ?>
+                            <div class="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600 flex flex-col sm:flex-row sm:items-center gap-2">
+                                <div class="flex items-center gap-1">
+                                    <i data-lucide="calendar" class="h-4 w-4"></i>
+                                    <span>ชำระเงินเมื่อ: <?= date('d/m/Y H:i', strtotime($payment['paidAt'] ?? $payment['createdAt'])); ?></span>
+                                </div>
+                                <span class="hidden sm:inline">•</span>
+                                <div class="flex items-center gap-1">
+                                    <i data-lucide="credit-card" class="h-4 w-4"></i>
+                                    <span>วิธีการ: <?= $payment['paymentMethod'] ?? 'N/A'; ?></span>
+                                </div>
+                                <span class="hidden sm:inline">•</span>
+                                <div class="flex items-center gap-1">
+                                    <i data-lucide="dollar-sign" class="h-4 w-4"></i>
+                                    <span>จำนวน: ฿<?= number_format($payment['amount'] ?? 0); ?></span>
+                                </div>
                             </div>
                             <?php endif; ?>
                         </div>
 
-                        <!-- Actions -->
-                        <div class="flex flex-col sm:flex-row gap-2">
+                        <div class="flex flex-col sm:flex-row gap-2 mt-4 md:mt-0">
                             <?php if (!$payment): ?>
-                            <a href="index.php?page=payment&reservation=<?php echo $booking['reservationId']; ?>"
-                               class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                                <i data-lucide="credit-card" class="h-4 w-4"></i>
-                                ชำระเงิน
+                            <a href="index.php?page=payment&reservation=<?= $booking['reservationId']; ?>"
+                               class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                                <i data-lucide="credit-card" class="h-4 w-4"></i> ชำระเงิน
                             </a>
                             <?php else: ?>
                             <span class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
-                                <i data-lucide="check-circle" class="h-4 w-4"></i>
-                                ชำระแล้ว
+                                <i data-lucide="check-circle" class="h-4 w-4"></i> ชำระแล้ว
                             </span>
                             <?php endif; ?>
 
-                            <a href="index.php?page=booking-confirmation&reservation=<?php echo $booking['reservationId']; ?>"
-                            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                                <i data-lucide="eye" class="h-4 w-4"></i>
-                                ดูรายละเอียด
+                            <a href="index.php?page=booking-confirmation&reservation=<?= $booking['reservationId']; ?>"
+                               class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                                <i data-lucide="eye" class="h-4 w-4"></i> ดูรายละเอียด
                             </a>
                         </div>
                     </div>
-
-                    <!-- Payment Info -->
-                    <?php if ($payment): ?>
-                    <div class="border-t mt-4 pt-4">
-                        <div class="flex items-center gap-2 text-sm text-gray-600">
-                            <i data-lucide="calendar" class="h-4 w-4"></i>
-                            <span>ชำระเงินเมื่อ: <?php echo date('d/m/Y H:i', strtotime($payment['paidAt'] ?? $payment['createdAt'])); ?></span>
-                            <span class="mx-2">•</span>
-                            <i data-lucide="credit-card" class="h-4 w-4"></i>
-                            <span>วิธีการ: <?php echo $payment['paymentMethod'] ?? 'N/A'; ?></span>
-                            <span class="mx-2">•</span>
-                            <i data-lucide="dollar-sign" class="h-4 w-4"></i>
-                            <span>จำนวน: ฿<?php echo number_format($payment['amount'] ?? 0); ?></span>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
             </div>
@@ -238,6 +174,7 @@ usort($bookings, function ($a, $b) {
 </div>
 
 <script>
-    // เปิดใช้งาน Lucide icons
+if (typeof lucide !== 'undefined') {
     lucide.createIcons();
+}
 </script>

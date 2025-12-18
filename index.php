@@ -1,87 +1,62 @@
 <?php
-    // เริ่ม session ในทุกหน้าที่ด้านบนสุด
+// เริ่ม session และ output buffering
+if (session_status() === PHP_SESSION_NONE) {
     session_start();
-    // เปิด output buffering เพื่อให้ไฟล์ที่ถูก include สามารถเรียก header() ได้
-    ob_start();
+}
+ob_start();
 
-    // ตรวจสอบว่ามี flash message จากหน้าที่แล้วหรือไม่
-    $flash_message = $_SESSION['flash_message'] ?? null;
-    if ($flash_message) {
-        unset($_SESSION['flash_message']);
-    }
+// ตรวจสอบ flash message จากหน้าก่อนหน้า
+$flash_message = $_SESSION['flash_message'] ?? null;
+if ($flash_message) {
+    unset($_SESSION['flash_message']);
+}
 
-    // (0) Auth Guard: ตรวจสอบว่า page ไหนต้อง login ก่อน
-    $currentPage = $_GET['page'] ?? 'home';
-    if ($currentPage === 'booking' && ! isset($_SESSION['user'])) {
-        $_SESSION['redirect_url']  = $_SERVER['REQUEST_URI'];
-        $_SESSION['flash_message'] = [
-            'type'    => 'error',
-            'message' => 'กรุณาเข้าสู่ระบบก่อนทำการจอง',
-        ];
-        header("Location: login.php");
-        exit;
-    }
+// กำหนดหน้าเริ่มต้น
+$currentPage = $_GET['page'] ?? 'home';
 
-    // หากเข้าถึง index.php โดยตรง ให้เด้งไปหน้า home
-    if (basename($_SERVER['PHP_SELF']) === 'index.php' && empty($_GET['page'])) {
-        header('Location: index.php?page=home');
-        exit;
-    }
-
-    // ดึงชื่อหน้าจาก URL
-    $page = $_GET['page'] ?? 'home';
-
-    // รายการหน้าที่อนุญาต (Whitelist)
-    $pageMap = [
-        'home'                 => 'pages/HomePages.php',
-        'motorcycles'          => 'pages/MotorcyclesPages.php',
-        'booking'              => 'pages/BookingPages.php',
-        'booking-confirmation' => 'pages/BookingConfirmation.php',
-        'payment'              => 'pages/PaymentPages.php',
-        'my-bookings'          => 'pages/MyBookings.php',
-        'profile'              => 'pages/ProfilePages.php',
-        'employee'             => 'pages/employee/EmployeeRouter.php',
-        'admin'                => 'pages/admin/AdminRouter.php',
+// Auth Guard: หน้า booking ต้อง login
+if ($currentPage === 'booking' && !isset($_SESSION['user'])) {
+    $_SESSION['redirect_url']  = $_SERVER['REQUEST_URI'];
+    $_SESSION['flash_message'] = [
+        'type'    => 'error',
+        'message' => 'กรุณาเข้าสู่ระบบก่อนทำการจอง',
     ];
+    header("Location: login.php");
+    exit;
+}
 
-    // ตรวจสอบว่าหน้าที่ขอมีอยู่ใน $pageMap หรือไม่
-    if (array_key_exists($page, $pageMap)) {
-        $contentFile = $pageMap[$page];
-    } else {
-        http_response_code(404);
-        $contentFile = 'pages/404.php';
-    }
+// redirect ถ้าเข้าผ่าน index.php โดยตรง
+if (basename($_SERVER['PHP_SELF']) === 'index.php' && empty($_GET['page'])) {
+    header('Location: index.php?page=home');
+    exit;
+}
 
-    // (POST Handler) ตรวจสอบ POST request จาก booking form
-    if ($page === 'booking' && $_SERVER["REQUEST_METHOD"] == "POST") {
-        // ดึง POST data
-        $startDate      = $_POST['start_date'] ?? '';
-        $endDate        = $_POST['end_date'] ?? '';
-        $returnLocation = $_POST['return_location'] ?? '';
+// ดึงชื่อ page
+$page = $_GET['page'] ?? 'home';
 
-        // ตรวจสอบไฟล์อัพโหลด
-        if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] == UPLOAD_ERR_OK) {
-            $uploadDir = 'uploads/';
+// Whitelist page map
+$pageMap = [
+    'home'                 => 'pages/HomePages.php',
+    'motorcycles'          => 'pages/MotorcyclesPages.php',
+    'booking'              => 'pages/BookingPages.php',
+    'booking-confirmation' => 'pages/BookingConfirmation.php',
+    'payment'              => 'pages/PaymentPages.php',
+    'my-bookings'          => 'pages/MyBookings.php',
+    'profile'              => 'pages/ProfilePages.php',
+    'employee'             => 'pages/employee/EmployeeRouter.php',
+    'admin'                => 'pages/admin/AdminRouter.php',
+];
 
-            // สร้างโฟลเดอร์ถ้ายังไม่มี
-            if (! is_dir($uploadDir)) {
-                mkdir($uploadDir, 0755, true);
-            }
+// ตรวจสอบว่า page ที่ขอมีอยู่หรือไม่
+if (array_key_exists($page, $pageMap)) {
+    $contentFile = $pageMap[$page];
+} else {
+    http_response_code(404);
+    $contentFile = 'pages/404.php';
+}
 
-            $fileName   = time() . '_' . basename($_FILES['payment_proof']['name']);
-            $targetPath = $uploadDir . $fileName;
-
-            if (move_uploaded_file($_FILES['payment_proof']['tmp_name'], $targetPath)) {
-                // อัพโหลดสำเร็จ - ตั้งค่า flash message และ redirect
-                $_SESSION['flash_message'] = [
-                    'type'    => 'success',
-                    'message' => 'จองสำเร็จ! เราจะติดต่อกลับภายใน 24 ชั่วโมง',
-                ];
-                header("Location: index.php?page=profile");
-                exit;
-            }
-        }
-    }
+// --- หมายเหตุ ---
+// ลบ POST handler ของ booking ออกไป เพื่อให้ BookingPages.php จัดการเอง
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -94,17 +69,17 @@
 </head>
 <body class="min-h-screen bg-gray-50 flex flex-col">
 
-    <!-- 1. ส่วน Navbar -->
+    <!-- Navbar -->
     <?php include 'components/Navbar.php'; ?>
 
-    <!-- 2. Flash Message -->
+    <!-- Flash Message -->
     <?php if ($flash_message): ?>
-        <div class="fixed top-20 right-4 z-50<?php echo $flash_message['type'] === 'error' ? 'bg-red-500' : 'bg-green-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
+        <div class="fixed top-20 right-4 z-50 <?php echo $flash_message['type'] === 'error' ? 'bg-red-500' : 'bg-green-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
             <?php echo $flash_message['message']; ?>
         </div>
     <?php endif; ?>
 
-    <!-- 3. ส่วนเนื้อหาหลัก -->
+    <!-- Main Content -->
     <main class="flex-1">
         <?php
             if (file_exists($contentFile)) {
@@ -116,7 +91,7 @@
         ?>
     </main>
 
-    <!-- 4. ส่วน Footer -->
+    <!-- Footer -->
     <?php include 'components/Footer.php'; ?>
 
     <script>
