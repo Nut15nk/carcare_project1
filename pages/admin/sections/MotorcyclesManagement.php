@@ -1,361 +1,442 @@
 <?php
 // pages/admin/sections/MotorcyclesManagement.php
-// จัดการรถเช่า - ใช้ข้อมูลจริงจาก API
 
-require_once 'api/admin_motorcycles.php';
+session_start();
 
-// ดึงข้อมูลรถทั้งหมดจาก API
-$motorcycles = AdminMotorcycleService::getAllMotorcycles();
+require_once __DIR__ . '/../../../service/Admin/AdminService.php';
+use Service\Admin\AdminService;
 
-// Handle form actions
+/* ===================== LOAD DATA ===================== */
+try {
+    $motorcycles = AdminService::getAllMotorcycles();
+} catch (Throwable $e) {
+    $motorcycles = [];
+    $error = $e->getMessage();
+}
+
+/* ===================== HANDLE POST ===================== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_GET['action'] ?? null;
-    
-    if ($action === 'create') {
-        $motorcycleData = [
-            'motorcycleId' => $_POST['motorcycle_id'],
-            'brand' => $_POST['brand'],
-            'model' => $_POST['model'],
-            'year' => intval($_POST['year']),
-            'licensePlate' => $_POST['license_plate'],
-            'color' => $_POST['color'],
-            'pricePerDay' => floatval($_POST['price_per_day']),
-            'description' => $_POST['description'] ?? '',
-            'isAvailable' => isset($_POST['is_available']),
-            'maintenanceStatus' => $_POST['maintenance_status'] ?? 'READY'
-        ];
-        
-        $success = AdminMotorcycleService::createMotorcycle($motorcycleData);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'สร้างรถเช่าสำเร็จ'];
-            header('Location: index.php?page=admin&section=motorcycles');
-            exit;
-        } else {
-            $error = 'ไม่สามารถสร้างรถเช่าได้';
+    $action = $_GET['action'] ?? '';
+
+    try {
+        if ($action === 'create') {
+            AdminService::createMotorcycle([
+                'motorcycle_id'      => $_POST['motorcycle_id'],
+                'brand'              => $_POST['brand'],
+                'model'              => $_POST['model'],
+                'year'               => (int) $_POST['year'],
+                'license_plate'      => $_POST['license_plate'],
+                'color'              => $_POST['color'],
+                'price_per_day'      => (float) $_POST['price_per_day'],
+                'description'        => $_POST['description'] ?? null,
+                'is_available'       => isset($_POST['is_available']),
+                'maintenance_status' => $_POST['maintenance_status'] ?? 'READY',
+            ]);
+
+            $_SESSION['flash_message'] = [
+                'type' => 'success',
+                'message' => 'เพิ่มรถเช่าเรียบร้อยแล้ว',
+            ];
         }
-        
-    } elseif ($action === 'edit' && isset($_POST['motorcycle_id'])) {
-        $motorcycleId = $_POST['motorcycle_id'];
-        $motorcycleData = [
-            'brand' => $_POST['brand'],
-            'model' => $_POST['model'],
-            'year' => intval($_POST['year']),
-            'licensePlate' => $_POST['license_plate'],
-            'color' => $_POST['color'],
-            'pricePerDay' => floatval($_POST['price_per_day']),
-            'description' => $_POST['description'] ?? '',
-            'isAvailable' => isset($_POST['is_available']),
-            'maintenanceStatus' => $_POST['maintenance_status'] ?? 'READY'
-        ];
-        
-        $success = AdminMotorcycleService::updateMotorcycle($motorcycleId, $motorcycleData);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'อัปเดตรถเช่าสำเร็จ'];
-            header('Location: index.php?page=admin&section=motorcycles');
-            exit;
-        } else {
-            $error = 'ไม่สามารถอัปเดตรถเช่าได้';
+
+        if ($action === 'edit') {
+            AdminService::updateMotorcycle($_POST['motorcycle_id'], [
+                'brand'              => $_POST['brand'],
+                'model'              => $_POST['model'],
+                'year'               => (int) $_POST['year'],
+                'license_plate'      => $_POST['license_plate'],
+                'color'              => $_POST['color'],
+                'price_per_day'      => (float) $_POST['price_per_day'],
+                'description'        => $_POST['description'] ?? null,
+                'is_available'       => isset($_POST['is_available']),
+                'maintenance_status' => $_POST['maintenance_status'] ?? 'READY',
+            ]);
+
+            $_SESSION['flash_message'] = [
+                'type' => 'success',
+                'message' => 'อัปเดตรถเช่าเรียบร้อยแล้ว',
+            ];
         }
-        
-    } elseif ($action === 'delete' && isset($_POST['motorcycle_id'])) {
-        $motorcycleId = $_POST['motorcycle_id'];
-        $success = AdminMotorcycleService::deleteMotorcycle($motorcycleId);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'ลบรถเช่าสำเร็จ'];
-            header('Location: index.php?page=admin&section=motorcycles');
-            exit;
-        } else {
-            $error = 'ไม่สามารถลบรถเช่าได้';
+
+        if ($action === 'delete') {
+            AdminService::deleteMotorcycle($_POST['motorcycle_id']);
+
+            $_SESSION['flash_message'] = [
+                'type' => 'success',
+                'message' => 'ลบรถเช่าเรียบร้อยแล้ว',
+            ];
         }
+
+        header('Location: index.php?page=admin&section=motorcycles');
+        exit;
+
+    } catch (Throwable $e) {
+        $error = $e->getMessage();
     }
 }
 
-// ดึงข้อมูลสำหรับฟอร์มแก้ไข
+/* ===================== EDIT MODE ===================== */
 $editMotorcycle = null;
-if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['id'])) {
-    $editId = $_GET['id'];
+if (($_GET['action'] ?? '') === 'edit' && isset($_GET['id'])) {
     foreach ($motorcycles as $m) {
-        if ($m['motorcycleId'] === $editId || $m['id'] === $editId) {
+        if ($m['motorcycleId'] === $_GET['id']) {
             $editMotorcycle = $m;
             break;
         }
     }
 }
 
-// ฟังก์ชันช่วยในการแสดงสถานะ
-function getStatusBadge($isAvailable, $maintenanceStatus) {
-    if (!$isAvailable) {
-        return '<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">ไม่ว่าง</span>';
-    }
-    
-    $statusMap = [
-        'READY' => ['text' => 'พร้อมให้บริการ', 'class' => 'bg-green-100 text-green-800'],
-        'MAINTENANCE' => ['text' => 'ซ่อมบำรุง', 'class' => 'bg-yellow-100 text-yellow-800'],
-        'CLEANING' => ['text' => 'ทำความสะอาด', 'class' => 'bg-blue-100 text-blue-800'],
-        'UNAVAILABLE' => ['text' => 'ไม่พร้อมให้บริการ', 'class' => 'bg-red-100 text-red-800']
-    ];
-    
-    $statusInfo = $statusMap[$maintenanceStatus] ?? ['text' => $maintenanceStatus, 'class' => 'bg-gray-100 text-gray-800'];
-    return '<span class="px-2 py-1 text-xs font-semibold rounded-full ' . $statusInfo['class'] . '">' . $statusInfo['text'] . '</span>';
+/* ===================== HELPERS ===================== */
+function statusBadge(bool $available, string $status): string
+{
+
+
+    return match ($status) {
+        'READY'       => '<span class="px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">พร้อมใช้งาน</span>',
+        'MAINTENANCE' => '<span class="px-3 py-1.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">ซ่อมบำรุง</span>',
+        'CLEANING'    => '<span class="px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">ทำความสะอาด</span>',
+        'UNAVAILABLE' => '<span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">ไม่พร้อมใช้งาน</span>',
+        default       => '<span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">'.$status.'</span>',
+    };
+}
+
+function getStatusText(string $status): string
+{
+    return match ($status) {
+        'READY'       => 'พร้อมใช้งาน',
+        'MAINTENANCE' => 'ซ่อมบำรุง',
+        'CLEANING'    => 'ทำความสะอาด',
+        'UNAVAILABLE' => 'ไม่พร้อมใช้งาน',
+        default       => $status,
+    };
 }
 ?>
 
 <div class="space-y-6">
-    
-    <!-- Header -->
-    <div class="mb-4">
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">จัดการรถเช่า</h1>
-        <p class="text-gray-600">เพิ่ม แก้ไข และจัดการข้อมูลรถเช่าทั้งหมด</p>
+    <!-- Header Section -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">จัดการรถเช่า</h1>
+            <p class="text-gray-600 mt-1">เพิ่ม แก้ไข และควบคุมสถานะรถเช่าทั้งหมด</p>
+        </div>
+        <?php if ($editMotorcycle): ?>
+            <a href="index.php?page=admin&section=motorcycles" 
+               class="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                เพิ่มรถใหม่
+            </a>
+        <?php endif; ?>
     </div>
 
-    <!-- Alert Messages -->
+    <!-- Messages -->
     <?php if (isset($_SESSION['flash_message'])): ?>
-        <div class="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
-            <i data-lucide="check-circle" class="h-5 w-5"></i>
-            <span><?php echo $_SESSION['flash_message']['message']; ?></span>
+        <div class="p-4 rounded-lg bg-green-50 text-green-700 border border-green-200 flex items-start">
+            <svg class="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+            </svg>
+            <div>
+                <p class="font-medium">ดำเนินการสำเร็จ</p>
+                <p class="text-sm"><?php echo $_SESSION['flash_message']['message']; ?></p>
+            </div>
         </div>
         <?php unset($_SESSION['flash_message']); ?>
     <?php endif; ?>
 
-    <?php if (isset($error)): ?>
-        <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
-            <i data-lucide="alert-circle" class="h-5 w-5"></i>
-            <span><?php echo $error; ?></span>
+    <?php if (!empty($error)): ?>
+        <div class="p-4 rounded-lg bg-red-50 text-red-700 border border-red-200 flex items-start">
+            <svg class="w-5 h-5 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <div>
+                <p class="font-medium">เกิดข้อผิดพลาด</p>
+                <p class="text-sm"><?php echo $error; ?></p>
+            </div>
         </div>
     <?php endif; ?>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        <!-- Form Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- Form Panel -->
         <div class="lg:col-span-1">
-            <div class="bg-white rounded-lg shadow p-6 sticky top-8">
-                <h2 class="text-xl font-bold mb-4">
-                    <?php echo $editMotorcycle ? 'แก้ไขรถเช่า' : 'เพิ่มรถเช่าใหม่'; ?>
-                </h2>
-
-                <form method="POST" action="index.php?page=admin&section=motorcycles&action=<?php echo $editMotorcycle ? 'edit' : 'create'; ?>">
-                    
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="font-semibold text-lg text-gray-800">
+                        <?php echo $editMotorcycle ? 'แก้ไขรถเช่า' : 'เพิ่มรถเช่าใหม่'; ?>
+                    </h2>
                     <?php if ($editMotorcycle): ?>
-                        <input type="hidden" name="motorcycle_id" value="<?php echo htmlspecialchars($editMotorcycle['motorcycleId'] ?? $editMotorcycle['id']); ?>">
-                    <?php else: ?>
-                        <!-- Motorcycle ID (สำหรับการสร้างใหม่) -->
-                        <div class="mb-4">
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">รหัสรถเช่า</label>
-                            <input type="text" name="motorcycle_id" 
-                                value="<?php echo htmlspecialchars($editMotorcycle['motorcycleId'] ?? $editMotorcycle['id'] ?? ''); ?>"
-                                placeholder="เช่น MOTO001" 
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                required>
-                        </div>
+                        <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                            โหมดแก้ไข
+                        </span>
                     <?php endif; ?>
+                </div>
 
-                    <!-- Brand -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">ยี่ห้อ</label>
-                        <input type="text" name="brand" 
-                            value="<?php echo htmlspecialchars($editMotorcycle['brand'] ?? ''); ?>"
-                            placeholder="เช่น Honda, Yamaha" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- Model -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">รุ่น</label>
-                        <input type="text" name="model" 
-                            value="<?php echo htmlspecialchars($editMotorcycle['model'] ?? ''); ?>"
-                            placeholder="เช่น Click 160, PCX" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- Year -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">ปี</label>
-                        <input type="number" name="year" min="2000" max="2030"
-                            value="<?php echo htmlspecialchars($editMotorcycle['year'] ?? date('Y')); ?>"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- License Plate -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">ทะเบียน</label>
-                        <input type="text" name="license_plate" 
-                            value="<?php echo htmlspecialchars($editMotorcycle['licensePlate'] ?? $editMotorcycle['license_plate'] ?? ''); ?>"
-                            placeholder="เช่น กข1234" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- Color -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">สี</label>
-                        <input type="text" name="color" 
-                            value="<?php echo htmlspecialchars($editMotorcycle['color'] ?? ''); ?>"
-                            placeholder="เช่น ดำ, แดง, ขาว" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- Price Per Day -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">ราคาต่อวัน (฿)</label>
-                        <input type="number" name="price_per_day" step="0.01" min="0"
-                            value="<?php echo htmlspecialchars($editMotorcycle['pricePerDay'] ?? $editMotorcycle['price_per_day'] ?? ''); ?>"
-                            placeholder="เช่น 500.00" 
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            required>
-                    </div>
-
-                    <!-- Description -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">รายละเอียด</label>
-                        <textarea name="description" 
-                            placeholder="รายละเอียดเพิ่มเติมเกี่ยวกับรถ..."
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                            rows="3"><?php echo htmlspecialchars($editMotorcycle['description'] ?? ''); ?></textarea>
-                    </div>
-
-                    <!-- Availability -->
-                    <div class="mb-4">
-                        <label class="flex items-center">
-                            <input type="checkbox" name="is_available" 
-                                <?php echo ($editMotorcycle['isAvailable'] ?? $editMotorcycle['is_available'] ?? true) ? 'checked' : ''; ?>
-                                class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-700">พร้อมให้บริการ</span>
+                <form method="post"
+                      action="index.php?page=admin&section=motorcycles&action=<?php echo $editMotorcycle ? 'edit' : 'create'; ?>"
+                      class="space-y-4 pb-6" 
+                      onsubmit="return validateForm()">
+                      
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">
+                            รหัสรถเช่า
                         </label>
+                        <?php if ($editMotorcycle): ?>
+                            <div class="flex items-center">
+                                <input type="hidden" name="motorcycle_id" value="<?php echo htmlspecialchars($editMotorcycle['motorcycleId']); ?>">
+                                <div class="w-full px-3 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                                    <?php echo htmlspecialchars($editMotorcycle['motorcycleId']); ?>
+                                </div>
+                            </div>
+                        <?php else: ?>
+                            <input name="motorcycle_id" 
+                                   placeholder="เช่น MC001, MC002"
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                   required>
+                        <?php endif; ?>
                     </div>
 
-                    <!-- Maintenance Status -->
-                    <div class="mb-6">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">สถานะการบำรุงรักษา</label>
-                        <select name="maintenance_status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="READY" <?php echo ($editMotorcycle['maintenanceStatus'] ?? $editMotorcycle['maintenance_status'] ?? '') === 'READY' ? 'selected' : ''; ?>>พร้อมให้บริการ</option>
-                            <option value="MAINTENANCE" <?php echo ($editMotorcycle['maintenanceStatus'] ?? $editMotorcycle['maintenance_status'] ?? '') === 'MAINTENANCE' ? 'selected' : ''; ?>>ซ่อมบำรุง</option>
-                            <option value="CLEANING" <?php echo ($editMotorcycle['maintenanceStatus'] ?? $editMotorcycle['maintenance_status'] ?? '') === 'CLEANING' ? 'selected' : ''; ?>>ทำความสะอาด</option>
-                            <option value="UNAVAILABLE" <?php echo ($editMotorcycle['maintenanceStatus'] ?? $editMotorcycle['maintenance_status'] ?? '') === 'UNAVAILABLE' ? 'selected' : ''; ?>>ไม่พร้อมให้บริการ</option>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                ยี่ห้อ
+                            </label>
+                            <input name="brand" 
+                                   placeholder="เช่น Honda, Yamaha"
+                                   value="<?php echo htmlspecialchars($editMotorcycle['brand'] ?? ''); ?>"
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                   required>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                รุ่น
+                            </label>
+                            <input name="model" 
+                                   placeholder="เช่น CBR150R, NMAX"
+                                   value="<?php echo htmlspecialchars($editMotorcycle['model'] ?? ''); ?>"
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                   required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                ปี
+                            </label>
+                            <input type="number" 
+                                   name="year" 
+                                   placeholder="เช่น 2023"
+                                   min="2000"
+                                   max="<?php echo date('Y') + 1; ?>"
+                                   value="<?php echo htmlspecialchars($editMotorcycle['year'] ?? date('Y')); ?>"
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                สี
+                            </label>
+                            <input name="color" 
+                                   placeholder="เช่น ดำ, แดง"
+                                   value="<?php echo htmlspecialchars($editMotorcycle['color'] ?? ''); ?>"
+                                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">
+                            ทะเบียนรถ
+                        </label>
+                        <input name="license_plate" 
+                               placeholder="เช่น กข 1234 กรุงเทพมหานคร"
+                               value="<?php echo htmlspecialchars($editMotorcycle['licensePlate'] ?? ''); ?>"
+                               class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                               required>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">
+                            ราคาต่อวัน (บาท)
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">฿</span>
+                            <input type="number" 
+                                   step="0.01"
+                                   min="0"
+                                   name="price_per_day" 
+                                   placeholder="0.00"
+                                   value="<?php echo htmlspecialchars($editMotorcycle['pricePerDay'] ?? ''); ?>"
+                                   class="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                                   required>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">
+                            รายละเอียดเพิ่มเติม
+                        </label>
+                        <textarea name="description" 
+                                  rows="3"
+                                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none"
+                                  placeholder="รายละเอียดเกี่ยวกับรถ..."><?php echo htmlspecialchars($editMotorcycle['description'] ?? ''); ?></textarea>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">
+                            สถานะการบำรุงรักษา
+                        </label>
+                        <select name="maintenance_status" 
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                            <?php foreach (['READY' => 'พร้อมใช้งาน', 'MAINTENANCE' => 'ซ่อมบำรุง', 'CLEANING' => 'ทำความสะอาด', 'UNAVAILABLE' => 'ไม่พร้อมใช้งาน'] as $value => $label): ?>
+                                <option value="<?php echo $value; ?>"
+                                    <?php echo (($editMotorcycle['maintenanceStatus'] ?? 'READY') === $value) ? 'selected' : ''; ?>>
+                                    <?php echo $label; ?>
+                                </option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
 
-                    <!-- Submit Buttons -->
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
-                            <?php echo $editMotorcycle ? 'อัปเดต' : 'สร้าง'; ?>
+
+
+                    <div class="pt-4">
+                        <button type="submit"
+                                class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                            <div class="flex items-center justify-center">
+                                <?php if ($editMotorcycle): ?>
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                    บันทึกการแก้ไข
+                                <?php else: ?>
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                    </svg>
+                                    เพิ่มรถเช่าใหม่
+                                <?php endif; ?>
+                            </div>
                         </button>
-                        <?php if ($editMotorcycle): ?>
-                            <a href="index.php?page=admin&section=motorcycles" class="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-900 font-semibold py-2 px-4 rounded-lg text-center transition">
-                                ยกเลิก
-                            </a>
-                        <?php endif; ?>
                     </div>
                 </form>
             </div>
         </div>
 
-        <!-- List Section -->
+        <!-- Table Panel -->
         <div class="lg:col-span-3">
-            <!-- Stats -->
-            <div class="grid grid-cols-4 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-sm text-gray-600">รถทั้งหมด</p>
-                    <p class="text-2xl font-bold text-blue-600"><?php echo count($motorcycles); ?></p>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <h2 class="font-semibold text-lg text-gray-800">รายการรถเช่าทั้งหมด</h2>
+                            <p class="text-sm text-gray-600 mt-1">
+                                <?php echo count($motorcycles); ?> คัน
+                            </p>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="relative">
+                                <input type="text" 
+                                       id="searchMotorcycle"
+                                       placeholder="ค้นหารถเช่า..."
+                                       class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                                <svg class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-sm text-gray-600">พร้อมให้บริการ</p>
-                    <p class="text-2xl font-bold text-green-600">
-                        <?php 
-                        $availableCount = array_filter($motorcycles, function($m) {
-                            return $m['isAvailable'] ?? $m['is_available'] ?? false;
-                        });
-                        echo count($availableCount);
-                        ?>
-                    </p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-sm text-gray-600">กำลังซ่อมบำรุง</p>
-                    <p class="text-2xl font-bold text-yellow-600">
-                        <?php 
-                        $maintenanceCount = array_filter($motorcycles, function($m) {
-                            $status = $m['maintenanceStatus'] ?? $m['maintenance_status'] ?? '';
-                            return $status === 'MAINTENANCE';
-                        });
-                        echo count($maintenanceCount);
-                        ?>
-                    </p>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <p class="text-sm text-gray-600">ไม่พร้อมให้บริการ</p>
-                    <p class="text-2xl font-bold text-red-600">
-                        <?php 
-                        $unavailableCount = array_filter($motorcycles, function($m) {
-                            return !($m['isAvailable'] ?? $m['is_available'] ?? false);
-                        });
-                        echo count($unavailableCount);
-                        ?>
-                    </p>
-                </div>
-            </div>
 
-            <!-- Motorcycles Table -->
-            <div class="bg-white rounded-lg shadow overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-100 border-b">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-3 text-left font-semibold">รหัสรถ</th>
-                                <th class="px-4 py-3 text-left font-semibold">ยี่ห้อ/รุ่น</th>
-                                <th class="px-4 py-3 text-left font-semibold">ทะเบียน</th>
-                                <th class="px-4 py-3 text-left font-semibold">ปี/สี</th>
-                                <th class="px-4 py-3 text-left font-semibold">ราคาต่อวัน</th>
-                                <th class="px-4 py-3 text-left font-semibold">สถานะ</th>
-                                <th class="px-4 py-3 text-left font-semibold">จัดการ</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    รหัสรถ
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    รายละเอียดรถ
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    ราคา/วัน
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                    สถานะ
+                                </th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider text-right">
+                                    จัดการ
+                                </th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y">
-                            <?php foreach ($motorcycles as $motorcycle): ?>
-                                <?php
-                                $motorcycleId = $motorcycle['motorcycleId'] ?? $motorcycle['id'];
-                                $brand = $motorcycle['brand'] ?? '';
-                                $model = $motorcycle['model'] ?? '';
-                                $year = $motorcycle['year'] ?? '';
-                                $licensePlate = $motorcycle['licensePlate'] ?? $motorcycle['license_plate'] ?? '';
-                                $color = $motorcycle['color'] ?? '';
-                                $pricePerDay = $motorcycle['pricePerDay'] ?? $motorcycle['price_per_day'] ?? 0;
-                                $isAvailable = $motorcycle['isAvailable'] ?? $motorcycle['is_available'] ?? false;
-                                $maintenanceStatus = $motorcycle['maintenanceStatus'] ?? $motorcycle['maintenance_status'] ?? 'READY';
-                                ?>
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-3 font-mono text-sm font-bold text-blue-600">
-                                        <?php echo htmlspecialchars($motorcycleId); ?>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <?php foreach ($motorcycles as $m): ?>
+                                <tr class="hover:bg-gray-50 transition-colors <?php echo ($editMotorcycle && $editMotorcycle['motorcycleId'] === $m['motorcycleId']) ? 'bg-blue-50' : ''; ?>"
+                                    data-search="<?php echo strtolower(htmlspecialchars($m['motorcycleId'] . ' ' . $m['brand'] . ' ' . $m['model'] . ' ' . $m['licensePlate'])); ?>">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900 font-mono">
+                                            <?php echo htmlspecialchars($m['motorcycleId']); ?>
+                                        </div>
                                     </td>
-                                    <td class="px-4 py-3">
-                                        <div class="font-semibold"><?php echo htmlspecialchars($brand); ?></div>
-                                        <div class="text-gray-600 text-sm"><?php echo htmlspecialchars($model); ?></div>
+                                    <td class="px-6 py-4">
+                                        <div class="flex items-start space-x-3">
+                                            <div class="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-50 rounded-lg flex items-center justify-center">
+                                                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-semibold text-gray-900">
+                                                    <?php echo htmlspecialchars($m['brand'] . ' ' . $m['model']); ?>
+                                                </div>
+                                                <div class="text-sm text-gray-600 mt-1">
+                                                    <?php echo htmlspecialchars($m['licensePlate']); ?>
+                                                    <?php if (!empty($m['color'])): ?>
+                                                        <span class="text-gray-400">•</span>
+                                                        <span class="text-gray-600"><?php echo htmlspecialchars($m['color']); ?></span>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($m['year'])): ?>
+                                                        <span class="text-gray-400">•</span>
+                                                        <span class="text-gray-600">ปี <?php echo htmlspecialchars($m['year']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if (!empty($m['description'])): ?>
+                                                    <div class="text-xs text-gray-500 mt-1 line-clamp-2">
+                                                        <?php echo htmlspecialchars($m['description']); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
                                     </td>
-                                    <td class="px-4 py-3 font-mono">
-                                        <?php echo htmlspecialchars($licensePlate); ?>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-semibold text-gray-900">
+                                            ฿<?php echo number_format($m['pricePerDay'], 2); ?>
+                                        </div>
+                                        <div class="text-xs text-gray-500">ต่อวัน</div>
                                     </td>
-                                    <td class="px-4 py-3">
-                                        <div class="text-sm"><?php echo htmlspecialchars($year); ?></div>
-                                        <div class="text-gray-600 text-sm"><?php echo htmlspecialchars($color); ?></div>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="space-y-2">
+                                            <?php echo statusBadge($m['isAvailable'], $m['maintenanceStatus']); ?>
+
+                                        </div>
                                     </td>
-                                    <td class="px-4 py-3 font-semibold">
-                                        ฿<?php echo number_format($pricePerDay, 2); ?>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <?php echo getStatusBadge($isAvailable, $maintenanceStatus); ?>
-                                    </td>
-                                    <td class="px-4 py-3">
-                                        <div class="flex gap-2">
-                                            <a href="index.php?page=admin&section=motorcycles&action=edit&id=<?php echo $motorcycleId; ?>" 
-                                               class="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-semibold">
+                                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                                        <div class="flex items-center justify-end space-x-2">
+                                            <a href="index.php?page=admin&section=motorcycles&action=edit&id=<?php echo htmlspecialchars($m['motorcycleId']); ?>"
+                                               class="inline-flex items-center px-3 py-1.5 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors text-sm">
+                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
                                                 แก้ไข
                                             </a>
-                                            <form method="POST" action="index.php?page=admin&section=motorcycles&action=delete" style="display:inline;">
-                                                <input type="hidden" name="motorcycle_id" value="<?php echo $motorcycleId; ?>">
-                                                <button type="submit" onclick="return confirm('ลบรถเช่านี้หรือไม่?')" 
-                                                        class="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-semibold">
+                                            <form method="post"
+                                                  action="index.php?page=admin&section=motorcycles&action=delete"
+                                                  onsubmit="return confirmDelete()"
+                                                  class="inline-block">
+                                                <input type="hidden" name="motorcycle_id" value="<?php echo htmlspecialchars($m['motorcycleId']); ?>">
+                                                <button type="submit"
+                                                        class="inline-flex items-center px-3 py-1.5 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors text-sm">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                                    </svg>
                                                     ลบ
                                                 </button>
                                             </form>
@@ -363,15 +444,87 @@ function getStatusBadge($isAvailable, $maintenanceStatus) {
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
+                            
+                            <?php if (empty($motorcycles)): ?>
+                                <tr>
+                                    <td colspan="5" class="px-6 py-12 text-center">
+                                        <div class="flex flex-col items-center justify-center text-gray-400">
+                                            <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                            <p class="text-lg font-medium text-gray-500 mb-2">ยังไม่มีข้อมูลรถเช่า</p>
+                                            <p class="text-gray-400">เริ่มต้นโดยเพิ่มรถเช่าคันแรก</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
                         </tbody>
                     </table>
-                    <?php if (empty($motorcycles)): ?>
-                        <div class="text-center py-8 text-gray-500">
-                            <p>ยังไม่มีข้อมูลรถเช่า</p>
-                        </div>
-                    <?php endif; ?>
                 </div>
+
+                <?php if (!empty($motorcycles)): ?>
+                    <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                        <div class="flex items-center justify-between text-sm text-gray-600">
+                            <div>
+                                แสดง <span class="font-semibold"><?php echo count($motorcycles); ?></span> รายการ
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                <span class="inline-flex items-center text-sm">
+                                    <span class="w-3 h-3 rounded-full bg-green-100 mr-1"></span>
+                                    พร้อมใช้งาน
+                                    <span class="mx-2">•</span>
+                                    <span class="w-3 h-3 rounded-full bg-yellow-100 mr-1"></span>
+                                    ซ่อมบำรุง
+                                    <span class="mx-2">•</span>
+                                    <span class="w-3 h-3 rounded-full bg-red-100 mr-1"></span>
+                                    ไม่ว่าง
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Form Validation
+function validateForm() {
+    const price = document.querySelector('input[name="price_per_day"]');
+    if (price && parseFloat(price.value) <= 0) {
+        alert('กรุณากรอกราคาต่อวันที่มากกว่า 0');
+        price.focus();
+        return false;
+    }
+    return true;
+}
+
+// Delete Confirmation
+function confirmDelete() {
+    return confirm('คุณแน่ใจว่าต้องการลบรถเช่าคันนี้?\nการกระทำนี้ไม่สามารถย้อนกลับได้');
+}
+
+// Search Functionality
+document.getElementById('searchMotorcycle')?.addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const rows = document.querySelectorAll('tbody tr[data-search]');
+    
+    rows.forEach(row => {
+        const searchText = row.getAttribute('data-search');
+        if (searchText.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+
+// Auto-focus on first input when in create mode
+<?php if (!$editMotorcycle): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    const firstInput = document.querySelector('input[name="motorcycle_id"]');
+    if (firstInput) firstInput.focus();
+});
+<?php endif; ?>
+</script>

@@ -46,15 +46,49 @@ INSERT INTO motorcycles (motorcycle_id,brand,model,`year`,license_plate,color,en
 ('MOTO025','Yamaha','NMAX',2024,'กค1241','ดำ',155,750.00,'https://storagetym.blob.core.windows.net/www2021/images/product-2021/commuter/model-year-2025/xmax-2025/lineup-360-dark-gray/2.png?sfvrsn=e29fd942_2',1,'รถสกูตเตอร์พรีเมียม','ready','2025-11-17 09:29:06','2025-11-17 09:29:06');
 
 -- 5. เพิ่มข้อมูลการจอง (อัปเดต ID รถให้ตรงกับรุ่นในรายการใหม่แล้ว)
-INSERT INTO reservations (reservation_id, customer_id, employee_id, motorcycle_id, start_date, end_date, total_days, total_price, status, deposit_amount, discount_amount, final_price, pickup_location, return_location) VALUES
--- MOTO008 คือ PCX160
-('res001', 'cust001', 'emp001', 'MOTO008', '2024-01-15', '2024-01-17', 3, 1950.00, 'completed', 1000.00, 0.00, 1950.00, 'สาขาหลัก', 'สาขาหลัก'),
--- MOTO017 คือ NMAX
-('res002', 'cust002', NULL, 'MOTO017', '2024-01-20', '2024-01-22', 3, 2250.00, 'confirmed', 1000.00, 100.00, 2150.00, 'สาขาหลัก', 'สาขาหลัก'),
--- MOTO022 คือ CBR150R
-('res003', 'cust003', NULL, 'MOTO022', '2024-01-25', '2024-01-27', 3, 2400.00, 'pending', 1000.00, 0.00, 2400.00, 'สาขาหลัก', 'สาขาหลัก'),
--- MOTO008 คือ PCX160
-('res004', 'cust004', NULL, 'MOTO008', '2025-11-20', '2025-11-22', 2, 1300.00, 'pending', 390.00, 0.00, 1300.00, 'สาขาหลัก', 'สาขาหลัก');
+INSERT INTO reservations (
+    reservation_id,
+    customer_id,
+    employee_id,
+    motorcycle_id,
+    start_datetime,
+    end_datetime,
+    total_days,
+    total_price,
+    status,
+    deposit_amount,
+    discount_amount,
+    final_price,
+    pickup_location,
+    return_location
+) VALUES
+-- MOTO008 : PCX160
+('res001', 'cust001', 'emp001', 'MOTO008',
+ '2024-01-15 10:00:00', '2024-01-17 18:00:00',
+ 3, 1950.00, 'completed',
+ 1000.00, 0.00, 1950.00,
+ 'สาขาหลัก', 'สาขาหลัก'),
+
+-- MOTO017 : NMAX
+('res002', 'cust002', NULL, 'MOTO017',
+ '2024-01-20 09:00:00', '2024-01-22 18:00:00',
+ 3, 2250.00, 'confirmed',
+ 1000.00, 100.00, 2150.00,
+ 'สาขาหลัก', 'สาขาหลัก'),
+
+-- MOTO022 : CBR150R
+('res003', 'cust003', NULL, 'MOTO022',
+ '2024-01-25 10:30:00', '2024-01-27 17:30:00',
+ 3, 2400.00, 'pending',
+ 1000.00, 0.00, 2400.00,
+ 'สาขาหลัก', 'สาขาหลัก'),
+
+-- MOTO008 : PCX160 (อนาคต)
+('res004', 'cust004', NULL, 'MOTO008',
+ '2025-11-20 09:00:00', '2025-11-22 18:00:00',
+ 2, 1300.00, 'pending',
+ 390.00, 0.00, 1300.00,
+ 'สาขาหลัก', 'สาขาหลัก');
 
 -- 6. เพิ่มข้อมูลการชำระเงิน
 INSERT INTO payments (payment_id, reservation_id, amount, payment_method, payment_status, payment_date, transaction_id, slip_image_url) VALUES

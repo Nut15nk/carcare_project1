@@ -71,23 +71,25 @@ CREATE TABLE reservations (
     customer_id VARCHAR(50) NOT NULL,
     employee_id VARCHAR(50),
     motorcycle_id VARCHAR(50) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
+    -- วัน + เวลา รับรถ / คืนรถ
+    start_datetime DATETIME NOT NULL,
+    end_datetime   DATETIME NOT NULL,
     total_days INT NOT NULL,
     total_price DECIMAL(10,2) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
     deposit_amount DECIMAL(10,2) NOT NULL,
     discount_amount DECIMAL(10,2) DEFAULT 0.00,
     final_price DECIMAL(10,2) NOT NULL,
-    pickup_location VARCHAR(255),
-    return_location VARCHAR(255),
-    special_requests TEXT,
+    -- จุดรับรถ / คืนรถ (ให้พิมพ์อิสระ)
+    pickup_location VARCHAR(255) NOT NULL,
+    return_location VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE SET NULL,
     FOREIGN KEY (motorcycle_id) REFERENCES motorcycles(motorcycle_id) ON DELETE CASCADE
 );
+
 
 -- 6. ตารางการชำระเงิน
 CREATE TABLE payments (

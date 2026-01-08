@@ -1,70 +1,33 @@
 <?php
 // pages/admin/sections/AdminDashboard.php
-session_start(); // ต้องมีบรรทัดนี้สำคัญ!
 
-// DEBUG: ตรวจสอบ Session
+session_start();
+
+require_once __DIR__ . '/../../../service/Admin/AdminService.php';
+use Service\Admin\AdminService;
+
+// DEBUG
 error_log("=== DASHBOARD DEBUG ===");
 error_log("Session User: " . (isset($_SESSION['user']) ? 'EXISTS' : 'NOT EXISTS'));
 error_log("User Role: " . ($_SESSION['user']['role'] ?? 'NO ROLE'));
-error_log("Token: " . (isset($_SESSION['user']['token']) ? 'EXISTS' : 'NOT EXISTS'));
 
-// โหลด AdminService
-$adminServicePaths = [
-    __DIR__ . '/../../../api/admin.php',
-    __DIR__ . '/../../api/admin.php', 
-    'api/admin.php'
-];
-
-$adminServiceLoaded = false;
-foreach ($adminServicePaths as $path) {
-    if (file_exists($path)) {
-        require_once $path;
-        $adminServiceLoaded = true;
-        break;
-    }
-}
-
-if (!$adminServiceLoaded) {
-    die("ไม่พบไฟล์ AdminService");
-}
-
-// ใช้ API จริงแทน Mock Data
 try {
-    // ดึงข้อมูลจาก API
     $statsData = AdminService::getDashboardStats();
-    $allReservations = AdminService::getAllReservations();
-    
-    // DEBUG: ดูข้อมูลที่ได้จาก API
-    error_log("Stats Data: " . json_encode($statsData));
-    error_log("Reservations Count: " . count($allReservations));
-    
-    // สร้าง stats จากข้อมูลจริง
-    $stats = [
-        ['label' => 'การจองทั้งหมด', 'value' => $statsData['totalBookings'] ?? 0, 'icon' => 'calendar', 'color' => 'bg-blue-500'],
-        ['label' => 'รอการยืนยัน', 'value' => $statsData['pendingBookings'] ?? 0, 'icon' => 'clock', 'color' => 'bg-yellow-500'],
-        ['label' => 'กำลังเช่า', 'value' => $statsData['activeBookings'] ?? 0, 'icon' => 'trending-up', 'color' => 'bg-green-500'],
-        ['label' => 'รายได้รวม', 'value' => '฿' . number_format($statsData['totalRevenue'] ?? 0, 0), 'icon' => 'credit-card', 'color' => 'bg-purple-500'],
-        ['label' => 'รถว่าง', 'value' => $statsData['availableMotorcycles'] ?? 0, 'icon' => 'bike', 'color' => 'bg-indigo-500'],
-    ];
-    
-    // ใช้การจองล่าสุดจาก API (5 รายการแรก)
-    $recentBookings = array_slice($allReservations, 0, 5);
-    
-} catch (Exception $e) {
-    // ถ้า API error ใช้ mock data fallback (ไม่กระทบการแสดงผล)
-    error_log("Dashboard API Error: " . $e->getMessage());
-    
-    // Fallback mock data
+    $recentBookings = AdminService::getRecentReservations(5);
+} catch (Throwable $e) {
+    error_log('[AdminDashboard] ' . $e->getMessage());
+    $statsData = [];
     $recentBookings = [];
-    
-    $stats = [
-        ['label' => 'การจองทั้งหมด', 'value' => 0, 'icon' => 'calendar', 'color' => 'bg-blue-500'],
-        ['label' => 'รอการยืนยัน', 'value' => 0, 'icon' => 'clock', 'color' => 'bg-yellow-500'],
-        ['label' => 'กำลังเช่า', 'value' => 0, 'icon' => 'trending-up', 'color' => 'bg-green-500'],
-        ['label' => 'รายได้รวม', 'value' => '฿0', 'icon' => 'credit-card', 'color' => 'bg-purple-500'],
-        ['label' => 'รถว่าง', 'value' => 0, 'icon' => 'bike', 'color' => 'bg-indigo-500'],
-    ];
 }
+
+// Stats card data (เหมือนเดิม ไม่แตะ UI)
+$stats = [
+    ['label'=>'การจองทั้งหมด','value'=>$statsData['totalBookings'] ?? 0,'icon'=>'calendar','color'=>'bg-blue-500'],
+    ['label'=>'รอการยืนยัน','value'=>$statsData['pendingBookings'] ?? 0,'icon'=>'clock','color'=>'bg-yellow-500'],
+    ['label'=>'กำลังเช่า','value'=>$statsData['activeBookings'] ?? 0,'icon'=>'trending-up','color'=>'bg-green-500'],
+    ['label'=>'รายได้รวม','value'=>'฿'.number_format($statsData['totalRevenue'] ?? 0),'icon'=>'credit-card','color'=>'bg-purple-500'],
+    ['label'=>'รถว่าง','value'=>$statsData['availableMotorcycles'] ?? 0,'icon'=>'bike','color'=>'bg-indigo-500'],
+];
 ?>
 
 <!-- (5) เริ่ม HTML ของ "ภาพรวม" -->
@@ -102,9 +65,10 @@ try {
             <?php else: ?>
                 <?php foreach ($recentBookings as $booking): ?>
                     <?php
-                    // กำหนดสีสถานะ
+                    // กำหนดสีสถานะ (logic เดิม)
                     $statusText = $booking['status'] ?? 'pending';
                     $statusColor = 'bg-gray-100 text-gray-800';
+
                     if ($statusText === 'pending') {
                         $statusText = 'รอยืนยัน';
                         $statusColor = 'bg-yellow-100 text-yellow-800';
@@ -122,43 +86,45 @@ try {
                         $statusColor = 'bg-red-100 text-red-800';
                     }
                     ?>
+
                     <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
                         <div>
+                            <!-- 🔧 FIX: ใช้ brand / model จาก SQL -->
                             <p class="font-medium text-gray-900">
-                                <?php 
-                                if (isset($booking['motorcycle']['brand']) && isset($booking['motorcycle']['model'])) {
-                                    echo htmlspecialchars($booking['motorcycle']['brand'] . ' ' . $booking['motorcycle']['model']);
-                                } else if (isset($booking['motorcycleId'])) {
-                                    echo htmlspecialchars('รถรหัส: ' . $booking['motorcycleId']);
-                                } else {
-                                    echo 'ไม่พบข้อมูลรถ';
-                                }
-                                ?>
+                                <?php echo htmlspecialchars($booking['brand'] . ' ' . $booking['model']); ?>
                             </p>
+
+                            <!-- 🔧 FIX: ใช้ start_date / end_date -->
                             <p class="text-sm text-gray-600">
-                                <?php 
-                                $startDate = $booking['startDate'] ?? date('Y-m-d');
-                                $endDate = $booking['endDate'] ?? date('Y-m-d', strtotime('+1 day'));
-                                echo date('d/m/Y', strtotime($startDate)) . ' - ' . date('d/m/Y', strtotime($endDate)); 
+                                <?php
+                                echo date('d/m/Y', strtotime($booking['start_date'])) .
+                                     ' - ' .
+                                     date('d/m/Y', strtotime($booking['end_date']));
                                 ?>
                             </p>
                         </div>
+
                         <div class="text-right">
-                            <p class="font-medium text-gray-900">฿<?php echo number_format($booking['totalPrice'] ?? 0, 0); ?></p>
+                            <!-- 🔧 FIX: ใช้ total_price -->
+                            <p class="font-medium text-gray-900">
+                                ฿<?php echo number_format($booking['total_price'], 0); ?>
+                            </p>
+
                             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full <?php echo $statusColor; ?>">
                                 <?php echo $statusText; ?>
                             </span>
                         </div>
                     </div>
+
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
     </div>
 </div>
 
-<!-- DEBUG: แสดงข้อมูล session สำหรับตรวจสอบ -->
+<!-- DEBUG -->
 <script>
-console.log('Dashboard Debug:');
+console.log('Dashboard Debug');
 console.log('Stats Data:', <?php echo json_encode($statsData); ?>);
 console.log('Recent Bookings:', <?php echo json_encode($recentBookings); ?>);
 </script>

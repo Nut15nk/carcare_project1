@@ -1,188 +1,68 @@
 <?php
-// pages/admin/sections/DiscountManagement.php
-// จัดการโค้ดส่วนลด - ใช้ข้อมูลจริงจาก API
+    require_once __DIR__ . '/../../../service/Admin/AdminService.php';
+    use Service\Admin\AdminService;
 
-require_once 'api/admin.php';
+    /* ================= LOAD DATA ================= */
+    $allDiscounts = AdminService::getAllDiscounts();
 
-class DiscountService
-{
-
-    /**
-     * Get all discounts from API
-     */
-    public static function getAllDiscounts()
-    {
-        try {
-            $headers = [
-                'Authorization: Bearer ' . ($_SESSION['user']['token'] ?? ''),
-                'Content-Type: application/json',
-            ];
-
-            $response = ApiConfig::makeApiCall('/admin/discounts', 'GET', null, $headers);
-
-            if ($response['status'] === 200) {
-                return $response['data']['data'] ?? [];
+    /* ================= EDIT MODE ================= */
+    $editDiscount = null;
+    if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'edit') {
+        foreach ($allDiscounts as $d) {
+            if ($d['discountId'] === $_GET['id']) {
+                $editDiscount = $d;
+                break;
             }
-            return [];
-
-        } catch (Exception $e) {
-            error_log("DiscountService getAllDiscounts Error: " . $e->getMessage());
-            return [];
         }
     }
 
-    /**
-     * Create new discount
-     */
-    public static function createDiscount($discountData)
-    {
-        try {
-            $headers = [
-                'Authorization: Bearer ' . ($_SESSION['user']['token'] ?? ''),
-                'Content-Type: application/json',
-            ];
+    /* ================= HANDLE FORM ================= */
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $action = $_GET['action'] ?? '';
 
-            $response = ApiConfig::makeApiCall('/admin/discounts', 'POST', $discountData, $headers);
-
-            return $response['status'] === 201 || $response['status'] === 200;
-
-        } catch (Exception $e) {
-            error_log("DiscountService createDiscount Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Update discount
-     */
-    public static function updateDiscount($discountId, $discountData)
-    {
-        try {
-            $headers = [
-                'Authorization: Bearer ' . ($_SESSION['user']['token'] ?? ''),
-                'Content-Type: application/json',
-            ];
-
-            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'PUT', $discountData, $headers);
-
-            return $response['status'] === 200;
-
-        } catch (Exception $e) {
-            error_log("DiscountService updateDiscount Error: " . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Delete discount
-     */
-    public static function deleteDiscount($discountId)
-    {
-        try {
-            $headers = [
-                'Authorization: Bearer ' . ($_SESSION['user']['token'] ?? ''),
-                'Content-Type: application/json'
-            ];
-
-            $response = ApiConfig::makeApiCall("/admin/discounts/{$discountId}", 'DELETE', null, $headers);
-
-            return $response['status'] === 200;
-
-        } catch (Exception $e) {
-            error_log("DiscountService deleteDiscount Error: " . $e->getMessage());
-            return false;
-        }
-    }
-}
-
-// ดึงข้อมูลส่วนลดจาก API
-$allDiscounts = DiscountService::getAllDiscounts();
-
-// Handle form actions
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_GET['action'] ?? null;
-
-    if ($action === 'create') {
-        $discountData = [
-            'discountCode' => strtoupper(substr(str_replace('-', '', $_POST['code']), 0, 20)),
-            'discountType' => $_POST['type'],
+        $data = [
+            'discountCode'  => strtoupper(trim($_POST['code'] ?? '')),
+            'discountType'  => $_POST['type'],
             'discountValue' => floatval($_POST['value']),
-            'minDays' => intval($_POST['min_days']) ?? 1,
-            'maxDiscount' => !empty($_POST['max_discount']) ? floatval($_POST['max_discount']) : null,
-            'startDate' => $_POST['start_date'],
-            'endDate' => $_POST['end_date'],
-            'usageLimit' => !empty($_POST['usage_limit']) ? intval($_POST['usage_limit']) : null
+            'minDays'       => intval($_POST['min_days'] ?? 1),
+            'maxDiscount'   => ($_POST['max_discount'] ?? '') !== '' ? floatval($_POST['max_discount']) : null,
+            'startDate'     => $_POST['start_date'],
+            'endDate'       => $_POST['end_date'],
+            'usageLimit'    => ($_POST['usage_limit'] ?? '') !== '' ? intval($_POST['usage_limit']) : null,
         ];
 
-        $success = DiscountService::createDiscount($discountData);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'สร้างโค้ดส่วนลดสำเร็จ'];
-            header('Location: index . php ? page = admin&section = discounts');
-            exit;
-        } else {
-            $error = 'ไม่สามารถสร้างโค้ดส่วนลดได้';
+        if ($action === 'create') {
+            AdminService::createDiscount($data);
         }
 
-    } elseif ($action === 'edit' && isset($_POST['discount_id'])) {
-        $discountId = $_POST['discount_id'];
-        $discountData = [
-            'discountType' => $_POST['type'],
-            'discountValue' => floatval($_POST['value']),
-            'minDays' => intval($_POST['min_days']) ?? 1,
-            'maxDiscount' => !empty($_POST['max_discount']) ? floatval($_POST['max_discount']) : null,
-            'startDate' => $_POST['start_date'],
-            'endDate' => $_POST['end_date'],
-            'usageLimit' => !empty($_POST['usage_limit']) ? intval($_POST['usage_limit']) : null
-        ];
-
-        $success = DiscountService::updateDiscount($discountId, $discountData);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'อัปเดตส่วนลดสำเร็จ'];
-            header('Location : index . php ? page = admin&section = discounts');
-            exit;
-        } else {
-            $error = 'ไม่สามารถอัปเดตส่วนลดได้';
+        if ($action === 'edit' && isset($_POST['discount_id'])) {
+            AdminService::updateDiscount($_POST['discount_id'], $data);
         }
 
-    } elseif ($action === 'delete' && isset($_POST['discount_id'])) {
-        $discountId = $_POST['discount_id'];
-        $success = DiscountService::deleteDiscount($discountId);
-        if ($success) {
-            $_SESSION['flash_message'] = ['type' => 'success', 'message' => 'ลบส่วนลดสำเร็จ'];
-            header('Location : index . php ? page = admin&section = discounts');
-            exit;
-        } else {
-            $error = 'ไม่สามารถลบส่วนลดได้';
+        if ($action === 'delete' && isset($_POST['discount_id'])) {
+            AdminService::deleteDiscount($_POST['discount_id']);
         }
+
+        header('Location: index.php?page=admin&section=discounts');
+        exit;
     }
-}
 
-// ดึงข้อมูลสำหรับฟอร์มแก้ไข
-$editDiscount = null;
-if (isset($_GET['action']) && $_GET['action'] === 'edit' && isset($_GET['id'])) {
-    $editId = $_GET['id'];
-    foreach ($allDiscounts as $d) {
-        if ($d['discountId'] === $editId || $d['id'] === $editId) {
-            $editDiscount = $d;
-            break;
-        }
-    }
-}
+    /* ================= STATS ================= */
+    $now = time();
 
-// กรองข้อมูลสำหรับ Stats
-$activeDiscounts = array_filter($allDiscounts, function($d) {
-    $startDate = $d['startDate'] ?? $d['start_date'];
-    $endDate = $d['endDate'] ?? $d['end_date'];
-    $isActive = $d['isActive'] ?? $d['active'] ?? true;
+    $activeDiscounts = array_filter($allDiscounts, function ($d) use ($now) {
+        return strtotime($d['startDate']) <= $now
+        && strtotime($d['endDate']) >= $now
+            && $d['isActive'];
+    });
 
-    return strtotime($startDate) <= time() && time() <= strtotime($endDate) && $isActive;
-});
-
-$expiredDiscounts = array_filter($allDiscounts, function($d) {
-    $endDate = $d['endDate'] ?? $d['end_date'];
-    return time() > strtotime($endDate);
-});
+    $expiredDiscounts = array_filter($allDiscounts, function ($d) use ($now) {
+        return strtotime($d['endDate']) < $now;
+    });
 ?>
+
+
+
 
 <!-- ส่วน HTML ต่อไปนี้เหมือนเดิม แต่ใช้ข้อมูลจาก $allDiscounts แทน $_SESSION['discounts'] -->
 <div class="space-y-6">
@@ -231,7 +111,8 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                             <?php echo $editDiscount ? 'readonly ' : ''; ?>
                             value="<?php echo htmlspecialchars($editDiscount['discountCode'] ?? $editDiscount['code'] ?? ''); ?>"
                             placeholder="เช่น SUMMER50"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent <?php echo $editDiscount ? 'bg - gray - 100cursor - not - allowed' : ''; ?>"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                            <?php echo $editDiscount ? 'bg-gray-100 cursor-not-allowed' : ''; ?>"
                             required>
                         <p class="text-xs text-gray-500 mt-1">ตัวอักษรและตัวเลขเท่านั้น, สูงสุด 20 ตัว</p>
                     </div>
@@ -241,8 +122,8 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                         <label class="block text-sm font-semibold text-gray-700 mb-2">ประเภทส่วนลด</label>
                         <select name="type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
                             <option value="">เลือกประเภท...</option>
-                            <option value="percentage" <?php echo ($editDiscount['discountType'] ?? $editDiscount['type'] ?? '') === 'percentage' ? 'selected' : ''; ?>>เปอร์เซ็นต์ (%)</option>
-                            <option value="fixed" <?php echo ($editDiscount['discountType'] ?? $editDiscount['type'] ?? '') === 'fixed' ? 'selected' : ''; ?>>จำนวนคงที่ (฿)</option>
+                            <option value="percentage"                                                                                                             <?php echo($editDiscount['discountType'] ?? $editDiscount['type'] ?? '') === 'percentage' ? 'selected' : ''; ?>>เปอร์เซ็นต์ (%)</option>
+                            <option value="fixed"                                                                                                   <?php echo($editDiscount['discountType'] ?? $editDiscount['type'] ?? '') === 'fixed' ? 'selected' : ''; ?>>จำนวนคงที่ (฿)</option>
                         </select>
                     </div>
 
@@ -277,7 +158,7 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">วันที่เริ่มต้น</label>
                         <input type="date" name="start_date"
-                            value="<?php echo htmlspecialchars($editDiscount['startDate'] ?? $editDiscount['start_date'] ?? date('Y - m - d')); ?>"
+                            value="<?php echo htmlspecialchars($editDiscount['startDate'] ?? $editDiscount['start_date'] ?? date('Y-m-d')); ?>"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                             required>
                     </div>
@@ -286,7 +167,7 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">วันที่สิ้นสุด</label>
                         <input type="date" name="end_date"
-                            value="<?php echo htmlspecialchars($editDiscount['endDate'] ?? $editDiscount['end_date'] ?? date('Y - m - d', strtotime('+30days'))); ?>"
+                            value="<?php echo htmlspecialchars($editDiscount['endDate'] ?? $editDiscount['end_date'] ?? date('Y-m-d', strtotime('+30 days'))); ?>"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                             required>
                     </div>
@@ -350,22 +231,22 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                         <tbody class="divide-y">
                             <?php foreach ($allDiscounts as $discount): ?>
                                 <?php
-                                $discountId = $discount['discountId'] ?? $discount['id'];
-                                $discountCode = $discount['discountCode'] ?? $discount['code'];
-                                $discountType = $discount['discountType'] ?? $discount['type'];
-                                $discountValue = $discount['discountValue'] ?? $discount['value'];
-                                $minDays = $discount['minDays'] ?? $discount['min_days'] ?? 1;
-                                $maxDiscount = $discount['maxDiscount'] ?? $discount['max_discount'] ?? null;
-                                $startDate = $discount['startDate'] ?? $discount['start_date'];
-                                $endDate = $discount['endDate'] ?? $discount['end_date'];
-                                $usageLimit = $discount['usageLimit'] ?? $discount['usage_limit'] ?? null;
-                                $usedCount = $discount['usedCount'] ?? $discount['used_count'] ?? 0;
-                                $isActive = $discount['isActive'] ?? $discount['is_active'] ?? true;
+                                    $discountId    = $discount['discountId'] ?? $discount['id'];
+                                    $discountCode  = $discount['discountCode'] ?? $discount['code'];
+                                    $discountType  = $discount['discountType'] ?? $discount['type'];
+                                    $discountValue = $discount['discountValue'] ?? $discount['value'];
+                                    $minDays       = $discount['minDays'] ?? $discount['min_days'] ?? 1;
+                                    $maxDiscount   = $discount['maxDiscount'] ?? $discount['max_discount'] ?? null;
+                                    $startDate     = $discount['startDate'] ?? $discount['start_date'];
+                                    $endDate       = $discount['endDate'] ?? $discount['end_date'];
+                                    $usageLimit    = $discount['usageLimit'] ?? $discount['usage_limit'] ?? null;
+                                    $usedCount     = $discount['usedCount'] ?? $discount['used_count'] ?? 0;
+                                    $isActive      = $discount['isActive'] ?? $discount['is_active'] ?? true;
 
-                                $isActiveStatus = strtotime($startDate) <= time() && time() <= strtotime($endDate) && $isActive;
-                                $isExpired = time() > strtotime($endDate);
-                                $isUpcoming = strtotime($startDate) > time();
-                                $usagePercent = $usageLimit ? ($usedCount / $usageLimit * 100) : 0;
+                                    $isActiveStatus = strtotime($startDate) <= time() && time() <= strtotime($endDate) && $isActive;
+                                    $isExpired      = time() > strtotime($endDate);
+                                    $isUpcoming     = strtotime($startDate) > time();
+                                    $usagePercent   = $usageLimit ? ($usedCount / $usageLimit * 100) : 0;
                                 ?>
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-4 py-3 font-mono font-bold text-blue-600">
@@ -373,14 +254,14 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                                     </td>
                                     <td class="px-4 py-3">
                                         <?php
-                                        if ($discountType === 'percentage') {
-                                            echo $discountValue . ' % ';
-                                        } else {
-                                            echo '฿' . number_format($discountValue, 0);
-                                        }
-                                        if ($maxDiscount) {
-                                            echo '(สูงสุด ฿' . number_format($maxDiscount, 0) . ')';
-                                        }
+                                            if ($discountType === 'percentage') {
+                                                echo $discountValue . ' % ';
+                                            } else {
+                                                echo '฿' . number_format($discountValue, 0);
+                                            }
+                                            if ($maxDiscount) {
+                                                echo '(สูงสุด ฿' . number_format($maxDiscount, 0) . ')';
+                                            }
                                         ?>
                                     </td>
                                     <td class="px-4 py-3 text-xs">
@@ -392,7 +273,7 @@ $expiredDiscounts = array_filter($allDiscounts, function($d) {
                                         <div class="text-sm"><?php echo $usedCount; ?>/<?php echo $usageLimit ?: 'ไม่จำกัด'; ?></div>
                                         <?php if ($usageLimit): ?>
                                             <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
-                                                <div class="bg-blue-600 h-2 rounded-full" style="width: <?php echo min($usagePercent, 100); ?>%"></div>
+                                                <div class="bg-blue-600 h-2 rounded-full" style="width:                                                                                                                                                                                                               <?php echo min($usagePercent, 100); ?>%"></div>
                                             </div>
                                         <?php endif; ?>
                                     </td>
