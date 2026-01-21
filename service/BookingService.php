@@ -2,66 +2,93 @@
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/uuid.php';
 
-
-
 class BookingService
 {
+    private static function db()
+    {
+        return Database::connect();
+    }
+
     /**
      * สร้างการจองใหม่
      */
     public static function createBooking(array $data)
     {
-        $db = Database::connect();
+        $db = self::db();
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         try {
             $db->beginTransaction();
 
             $reservationId = gen_id('RES', 10);
-            $depositAmount = $data['depositAmount'] ?? round($data['finalPrice'] * 0.3, 2);
+            $depositAmount = $data['depositAmount'] ?? 500; // มัดจำคงที่ 500 บาท
+            $shopDiscount  = self::calculateShopDiscount($data['totalDays']);
+            $promoDiscount = $data['discountAmount'] ?? 0;
+
+            $totalDiscount = $shopDiscount + $promoDiscount;
+            $finalPrice    = max($data['totalPrice'] - $totalDiscount, 0);
 
             $stmt = $db->prepare("
-            INSERT INTO reservations
-            (
-                reservation_id,
-                customer_id,
-                employee_id,
-                motorcycle_id,
-                start_date,
-                end_date,
-                total_days,
-                total_price,
-                deposit_amount,
-                discount_amount,
-                final_price,
-                pickup_location,
-                return_location,
-                special_requests
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
+                INSERT INTO reservations (
+                    reservation_id,
+                    customer_id,
+                    motorcycle_id,
+                    start_datetime,
+                    end_datetime,
+                    total_days,
+                    total_price,
+                    status,
+                    deposit_amount,
+                    discount_amount,
+                    final_price,
+                    pickup_location,
+                    return_location,
+                    pickup_details,
+                    return_details,
+                    created_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, NOW()
+                )
+            ");
 
             $stmt->execute([
                 $reservationId,
                 $data['customerId'],
-                $data['employeeId'] ?? null,
                 $data['motorcycleId'],
                 $data['startDate'],
                 $data['endDate'],
                 $data['totalDays'],
                 $data['totalPrice'],
                 $depositAmount,
-                $data['discountAmount'] ?? 0,
-                $data['finalPrice'],
-                $data['pickupLocation'] ?? null,
-                $data['returnLocation'] ?? null,
-                $data['specialRequests'] ?? null,
+                $totalDiscount,
+                $finalPrice,
+                $data['pickupLocation'],
+                $data['returnLocation'],
+                $data['pickupDetails'] ?? null,
+                $data['returnDetails'] ?? null,
             ]);
+
+            // ถ้ามีการใช้ส่วนลด
+            if (! empty($data['discountCode']) && $data['discountAmount'] > 0) {
+                $discountInfo = DiscountService::validateDiscount(
+                    $data['discountCode'],
+                    $data['totalDays'],
+                    $data['totalPrice']
+                );
+
+                if ($discountInfo['valid']) {
+                    DiscountService::recordDiscountUsage(
+                        $reservationId,
+                        $discountInfo['discountId'],
+                        $data['discountAmount']
+                    );
+                }
+            }
 
             $db->commit();
             return $reservationId;
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $db->rollBack();
             error_log('BookingService::createBooking ' . $e->getMessage());
             throw $e;
@@ -73,34 +100,37 @@ class BookingService
      */
     public static function getCustomerBookings($customerId)
     {
-        $db   = Database::connect();
+        $db = self::db();
+
         $stmt = $db->prepare("
             SELECT
-                r.reservation_id as reservationId,
-                r.customer_id as customerId,
-                r.motorcycle_id as motorcycleId,
-                r.start_date as startDate,
-                r.end_date as endDate,
-                r.total_days as totalDays,
-                r.total_price as totalPrice,
-                r.deposit_amount as depositAmount,
-                r.discount_amount as discountAmount,
-                r.final_price as finalPrice,
-                r.pickup_location as pickupLocation,
-                r.return_location as returnLocation,
+                r.reservation_id AS reservationId,
+                r.customer_id    AS customerId,
+                r.motorcycle_id  AS motorcycleId,
+                r.start_datetime AS startDate,
+                r.end_datetime   AS endDate,
+                r.total_days     AS totalDays,
+                r.total_price    AS totalPrice,
+                r.deposit_amount AS depositAmount,
+                r.discount_amount AS discountAmount,
+                r.final_price    AS finalPrice,
+                r.pickup_location AS pickupLocation,
+                r.return_location AS returnLocation,
                 r.status,
-                r.created_at as createdAt,
-                r.updated_at as updatedAt,
+                r.created_at     AS createdAt,
+                r.updated_at     AS updatedAt,
+
                 m.brand,
                 m.model,
-                m.price_per_day as pricePerDay,
-                m.engine_cc as engineCc,
-                m.image_url as imageUrl
+                m.price_per_day  AS pricePerDay,
+                m.engine_cc      AS engineCc,
+                m.image_url      AS imageUrl
             FROM reservations r
             LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
             WHERE r.customer_id = ?
             ORDER BY r.created_at DESC
         ");
+
         $stmt->execute([$customerId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -110,33 +140,37 @@ class BookingService
      */
     public static function getBookingById($reservationId)
     {
-        $db   = Database::connect();
+        $db = self::db();
+
         $stmt = $db->prepare("
             SELECT
-                r.reservation_id as reservationId,
-                r.customer_id as customerId,
-                r.motorcycle_id as motorcycleId,
-                r.start_date as startDate,
-                r.end_date as endDate,
-                r.total_days as totalDays,
-                r.total_price as totalPrice,
-                r.deposit_amount as depositAmount,
-                r.discount_amount as discountAmount,
-                r.final_price as finalPrice,
-                r.pickup_location as pickupLocation,
-                r.return_location as returnLocation,
+                r.reservation_id AS reservationId,
+                r.customer_id    AS customerId,
+                r.motorcycle_id  AS motorcycleId,
+                r.start_datetime AS startDate,
+                r.end_datetime   AS endDate,
+                r.total_days     AS totalDays,
+                r.total_price    AS totalPrice,
+                r.deposit_amount AS depositAmount,
+                r.discount_amount AS discountAmount,
+                r.final_price    AS finalPrice,
+                r.pickup_location AS pickupLocation,
+                r.return_location AS returnLocation,
                 r.status,
-                r.created_at as createdAt,
-                r.updated_at as updatedAt,
+                r.created_at     AS createdAt,
+                r.updated_at     AS updatedAt,
+
                 m.brand,
                 m.model,
-                m.price_per_day as pricePerDay,
-                m.engine_cc as engineCc,
-                m.image_url as imageUrl
+                m.price_per_day  AS pricePerDay,
+                m.engine_cc      AS engineCc,
+                m.image_url      AS imageUrl
             FROM reservations r
             LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
-            WHERE r.reservation_id=?
+            WHERE r.reservation_id = ?
+            LIMIT 1
         ");
+
         $stmt->execute([$reservationId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
@@ -146,46 +180,45 @@ class BookingService
      */
     public static function getLatestCustomerBooking($customerId)
     {
-        $db   = Database::connect();
+        $db = self::db();
+
         $stmt = $db->prepare("
             SELECT
-                r.reservation_id as reservationId,
-                r.customer_id as customerId,
-                r.motorcycle_id as motorcycleId,
-                r.start_date as startDate,
-                r.end_date as endDate,
-                r.total_days as totalDays,
-                r.total_price as totalPrice,
-                r.deposit_amount as depositAmount,
-                r.discount_amount as discountAmount,
-                r.final_price as finalPrice,
-                r.pickup_location as pickupLocation,
-                r.return_location as returnLocation,
+                r.reservation_id AS reservationId,
+                r.start_datetime AS startDate,
+                r.end_datetime   AS endDate,
+                r.total_days     AS totalDays,
+                r.final_price    AS finalPrice,
                 r.status,
-                r.created_at as createdAt,
-                r.updated_at as updatedAt,
+                r.created_at     AS createdAt,
+
                 m.brand,
                 m.model,
-                m.price_per_day as pricePerDay,
-                m.engine_cc as engineCc,
-                m.image_url as imageUrl
+                m.price_per_day  AS pricePerDay,
+                m.engine_cc      AS engineCc,
+                m.image_url      AS imageUrl
             FROM reservations r
             LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
             WHERE r.customer_id = ?
             ORDER BY r.created_at DESC
             LIMIT 1
         ");
+
         $stmt->execute([$customerId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     /**
-     * อัพเดตสถานะการจอง
+     * อัปเดตสถานะการจอง
      */
     public static function updateBookingStatus($reservationId, $status)
     {
-        $db   = Database::connect();
-        $stmt = $db->prepare("UPDATE reservations SET status=? WHERE reservation_id=?");
+        $db   = self::db();
+        $stmt = $db->prepare("
+            UPDATE reservations
+            SET status = ?
+            WHERE reservation_id = ?
+        ");
         return $stmt->execute([$status, $reservationId]);
     }
 
@@ -194,6 +227,39 @@ class BookingService
      */
     public static function cancelBooking($reservationId)
     {
-        return self::updateBookingStatus($reservationId, 'CANCELLED');
+        return self::updateBookingStatus($reservationId, 'cancelled');
     }
+
+    /**
+     * ใช้เช็คช่วงวันที่ (หน้าโชว์รถ)
+     */
+    public static function getBookingsByDateRange(string $startDate, string $endDate): array
+    {
+        $db = self::db();
+
+        $stmt = $db->prepare("
+            SELECT
+                reservation_id,
+                motorcycle_id AS motorcycleId,
+                status
+            FROM reservations
+            WHERE NOT (
+                end_datetime < :start
+                OR start_datetime > :end
+            )
+        ");
+
+        $stmt->execute([
+            ':start' => $startDate . ' 00:00:00',
+            ':end'   => $endDate . ' 23:59:59',
+        ]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+    private static function calculateShopDiscount(int $totalDays): float
+    {
+        $group = intdiv($totalDays, 3); // ทุก 3 วัน
+        return $group * 50;
+    }
+
 }

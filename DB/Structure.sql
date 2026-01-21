@@ -1,6 +1,6 @@
 -- สร้างฐานข้อมูล
-CREATE DATABASE IF NOT EXISTS motorcycle_rental;
-USE motorcycle_rental;
+CREATE DATABASE IF NOT EXISTS motorcycle_rental_new;
+USE otorcycle_rental_new;
 
 -- 1. ตารางเจ้าของร้าน
 CREATE TABLE owners (
@@ -38,11 +38,7 @@ CREATE TABLE customers (
     first_name VARCHAR(255) NOT NULL,    -- แก้เป็น 255
     last_name VARCHAR(255) NOT NULL,     -- แก้เป็น 255
     phone VARCHAR(255) NOT NULL,         -- แก้เป็น 255
-    address VARCHAR(255),                -- แก้เป็น VARCHAR(255)
-    license_number VARCHAR(255),         -- แก้เป็น VARCHAR(255)
-    date_of_birth DATE,
-    id_card_number VARCHAR(255),         -- แก้เป็น VARCHAR(255)
-    is_verified TINYINT(1) DEFAULT FALSE, -- แก้เป็น TINYINT(1)
+    is_active TINYINT(1) DEFAULT TRUE,   -- แก้เป็น TINYINT(1)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -83,6 +79,13 @@ CREATE TABLE reservations (
     -- จุดรับรถ / คืนรถ (ให้พิมพ์อิสระ)
     pickup_location VARCHAR(255) NOT NULL,
     return_location VARCHAR(255) NOT NULL,
+    -- รายละเอียดเพิ่มเติม การรับ-คืนรถ
+    pickup_details TEXT,
+    return_details TEXT,
+    return_checked_at DATETIME NULL,
+    return_checked_by VARCHAR(50) NULL,
+    return_condition TEXT NULL,
+    return_motorcycle_status VARCHAR(20) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id) ON DELETE CASCADE,

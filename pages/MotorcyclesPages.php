@@ -1,196 +1,311 @@
 <?php
-// pages/MotorcyclesPages.php
+    // pages/MotorcyclesPages.php
 
-// 1️⃣ Include config และ Service ใหม่
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../service/MotorcycleService.php';
+    require_once __DIR__ . '/../config/config.php';
+    require_once __DIR__ . '/../service/MotorcycleService.php';
+    require_once __DIR__ . '/../service/BookingService.php';
 
-// 2️⃣ รับค่าตัวกรองจาก URL
-$searchTerm     = $_GET['search'] ?? '';
-$selectedBrand  = $_GET['brand'] ?? '';
-$selectedType   = $_GET['type'] ?? '';
-$priceRangeMin  = (int)($_GET['min_price'] ?? 0);
-$priceRangeMax  = (int)($_GET['max_price'] ?? 1000);
-$startDate      = $_GET['start_date'] ?? '';
-$endDate        = $_GET['end_date'] ?? '';
+    // รับค่าตัวกรองจาก URL
+    $searchTerm    = $_GET['search'] ?? '';
+    $selectedBrand = $_GET['brand'] ?? '';
+    $selectedType  = $_GET['type'] ?? '';
+    $priceRangeMin = (int) ($_GET['min_price'] ?? 0);
+    $priceRangeMax = (int) ($_GET['max_price'] ?? 1000);
+    $startDate     = $_GET['start_date'] ?? '';
+    $endDate       = $_GET['end_date'] ?? '';
 
-// 3️⃣ ดึงข้อมูลจาก Service ใหม่
-try {
+    // ดึงข้อมูลจาก Service
+    try {
     $filters = [
-        'brand' => $selectedBrand,
-        'model' => $searchTerm,
+
+        'brand'    => $searchTerm ? '' : $selectedBrand,
+        'model'    => $searchTerm,
         'minPrice' => $priceRangeMin,
         'maxPrice' => $priceRangeMax,
-        'type' => $selectedType
+        'type'     => $selectedType,
     ];
 
     $motorcycles_data = MotorcycleService::searchMotorcycles($filters, $startDate, $endDate);
 
-    if (!is_array($motorcycles_data)) $motorcycles_data = [];
+    if (! is_array($motorcycles_data)) {
+        $motorcycles_data = [];
+    }
 
-} catch (Exception $e) {
+    } catch (Exception $e) {
     $motorcycles_data = [];
-    $error_message = "ไม่สามารถโหลดข้อมูลรถได้: " . $e->getMessage();
-}
+    $error_message    = "ไม่สามารถโหลดข้อมูลรถได้: " . $e->getMessage();
+    }
 
-// 4️⃣ กรองข้อมูลเพิ่มเติมหน้าเว็บ (ถ้าต้องการ)
-$filteredMotorcycles = array_filter($motorcycles_data, function($bike) use ($searchTerm, $selectedBrand, $selectedType, $priceRangeMin, $priceRangeMax) {
+    // ตรวจสอบรถที่ถูกจองในช่วงวันที่เลือก
+    $bookedMotorcycleIds = [];
+    if ($startDate && $endDate) {
+    try {
+        $bookings = BookingService::getBookingsByDateRange($startDate, $endDate);
+        foreach ($bookings as $booking) {
+            $status = strtolower($booking['status']);
+            if (in_array($status, ['pending', 'confirmed', 'active'])) {
+                $bookedMotorcycleIds[] = $booking['motorcycleId'];
+            }
+
+        }
+    } catch (Exception $e) {
+        // ไม่แสดง error หากดึงข้อมูลการจองไม่สำเร็จ
+    }
+    }
+
+    // กรองข้อมูลเพิ่มเติมหน้าเว็บ
+    $filteredMotorcycles = array_filter($motorcycles_data, function ($bike) use ($searchTerm, $selectedBrand, $selectedType, $priceRangeMin, $priceRangeMax, $bookedMotorcycleIds, $startDate, $endDate) {
+    // กรองตามคำค้นหา
     if ($searchTerm) {
-        $term = strtolower($searchTerm);
+        $term       = strtolower($searchTerm);
         $brandModel = strtolower(($bike['brand'] ?? '') . ' ' . ($bike['model'] ?? ''));
-        if (!str_contains($brandModel, $term)) return false;
-    }
-    if ($selectedBrand && ($bike['brand'] ?? '') !== $selectedBrand) return false;
-    if ($selectedType) {
-        $cc = $bike['engineCc'] ?? 0;
-        $typeMatch = false;
-        if ($selectedType === 'small' && $cc <= 150) $typeMatch = true;
-        if ($selectedType === 'medium' && $cc > 150 && $cc <= 300) $typeMatch = true;
-        if ($selectedType === 'large' && $cc > 300) $typeMatch = true;
-        if (!$typeMatch) return false;
-    }
-    $price = $bike['pricePerDay'] ?? 0;
-    if ($price < $priceRangeMin || $price > $priceRangeMax) return false;
-    return true;
-});
+        if (! str_contains($brandModel, $term)) {
+            return false;
+        }
 
-// 5️⃣ เตรียม Dropdowns
-$brands = !empty($motorcycles_data) ? array_unique(array_column($motorcycles_data, 'brand')) : [];
-$types = [
+    }
+
+    // กรองตามยี่ห้อ
+    if ($selectedBrand && ($bike['brand'] ?? '') !== $selectedBrand) {
+        return false;
+    }
+
+    // กรองตามขนาดเครื่อง
+    if ($selectedType) {
+        $cc        = $bike['engineCc'] ?? 0;
+        $typeMatch = false;
+        if ($selectedType === 'small' && $cc <= 150) {
+            $typeMatch = true;
+        }
+
+        if ($selectedType === 'medium' && $cc > 150 && $cc <= 300) {
+            $typeMatch = true;
+        }
+
+        if ($selectedType === 'large' && $cc > 300) {
+            $typeMatch = true;
+        }
+
+        if (! $typeMatch) {
+            return false;
+        }
+
+    }
+
+    // กรองตามราคา
+    $price = $bike['pricePerDay'] ?? 0;
+    if ($price < $priceRangeMin || $price > $priceRangeMax) {
+        return false;
+    }
+
+    // ตรวจสอบว่ารถว่างในช่วงวันที่เลือกหรือไม่
+    if ($startDate && $endDate) {
+        $motorcycleId = $bike['motorcycleId'] ?? '';
+        if (in_array($motorcycleId, $bookedMotorcycleIds)) {
+            return false; // ไม่แสดงรถที่ถูกจองแล้ว
+        }
+    }
+
+    // ตรวจสอบสถานะบำรุงรักษา
+    $maintenanceStatus = strtolower($bike['maintenanceStatus'] ?? 'ready');
+    if ($maintenanceStatus !== 'ready') {
+        return false;
+    }
+
+    return true;
+    });
+
+    // เตรียม Dropdowns
+    $brands = ! empty($motorcycles_data) ? array_unique(array_column($motorcycles_data, 'brand')) : [];
+    $types  = [
     'small'  => 'เล็ก (≤ 150cc)',
     'medium' => 'กลาง (151-300cc)',
-    'large'  => 'ใหญ่ (> 300cc)'
-];
+    'large'  => 'ใหญ่ (> 300cc)',
+    ];
 
-// 6️⃣ โปรโมชั่นตัวอย่าง
-function calculateDiscount($days, $pricePerDay) {
+    // โปรโมชั่นตัวอย่าง
+    function calculateDiscount($days, $pricePerDay)
+    {
     $normalPrice = $days * $pricePerDay;
-    $discount = ($days >= 3) ? floor($days / 3) * 50 : 0;
+    $discount    = ($days >= 3) ? floor($days / 3) * 50 : 0;
     return [
         'normalPrice' => $normalPrice,
         'finalPrice'  => $normalPrice - $discount,
-        'discount'    => $discount
+        'discount'    => $discount,
     ];
-}
+    }
 
-$promoDays = 3;
-$promoPricePerDay = 650;
-$promoData = calculateDiscount($promoDays, $promoPricePerDay);
+    $promoDays        = 3;
+    $promoPricePerDay = 650;
+    $promoData        = calculateDiscount($promoDays, $promoPricePerDay);
 
-// 7️⃣ Base64 placeholder image
-$placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    // Base64 placeholder image
+    $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 ?>
 
-
-<div class="min-h-screen bg-gray-50">
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เลือกเช่ารถจักรยานยนต์ | Motorcycle Rental</title>
+</head>
+<body class="bg-gray-50">
     <!-- Hero Section -->
-    <div class="bg-gradient-to-r from-blue-600 to-blue-800 text-white py-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="relative bg-gradient-to-br from-blue-900 to-blue-700 text-white overflow-hidden">
+        <div class="absolute inset-0 bg-black opacity-20"></div>
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 md:py-24">
             <div class="text-center">
-                <h1 class="text-4xl font-bold mb-4">เลือกรถจักรยานยนต์ของคุณ</h1>
-                <p class="text-xl text-blue-100">รถหลากหลายรุ่น ตั้งแต่ 110cc ถึง 700cc</p>
+                <h1 class="text-4xl md:text-5xl font-bold mb-4 tracking-tight">
+                    ค้นหารถจักรยานยนต์ที่เหมาะกับคุณ
+                </h1>
+                <p class="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+                    จาก 110cc ถึง 700cc พร้อมบริการส่ง-รับรถถึงที่
+                </p>
+                <div class="inline-flex items-center gap-2 bg-blue-800/50 backdrop-blur-sm rounded-full px-6 py-3">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                    <span class="font-medium">พร้อมใช้งาน <?php echo count($filteredMotorcycles); ?> คัน</span>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        <!-- Search and Filter Section -->
-        <form method="GET" action="index.php">
-            <input type="hidden" name="page" value="motorcycles">
 
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                    <!-- Search -->
-                    <div class="relative">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5"></i>
-                        <input
-                            type="text"
-                            name="search"
-                            placeholder="ค้นหายี่ห้อหรือรุ่นรถ..."
-                            value="<?php echo htmlspecialchars($searchTerm); ?>"
-                            class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-                    
-                    <!-- Start Date -->
+
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 -mt-8">
+        <!-- Search Card -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-8 border border-gray-100">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="p-2 bg-blue-100 rounded-lg">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800">ค้นหาและจองรถ</h2>
+                    <p class="text-gray-600 text-sm">กรอกวันที่รับ-คืนรถและตัวกรองอื่นๆ</p>
+                </div>
+            </div>
+
+            <form method="GET" action="index.php" class="space-y-6">
+                <input type="hidden" name="page" value="motorcycles">
+
+                <!-- Date Picker Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-blue-50 p-4 rounded-xl">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่รับรถ</label>
-                        <input
-                            type="date"
-                            name="start_date"
-                            value="<?php echo htmlspecialchars($startDate); ?>"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            min="<?php echo date('Y-m-d'); ?>"
-                        />
+                        <label class="block text-sm font-semibold text-blue-800 mb-2">วันที่รับรถ</label>
+                        <div class="relative">
+                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <input
+                                type="date"
+                                name="start_date"
+                                value="<?php echo htmlspecialchars($startDate); ?>"
+                                class="w-full pl-10 pr-4 py-3 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                min="<?php echo date('Y-m-d'); ?>"
+                                required
+                            />
+                        </div>
                     </div>
-                    
-                    <!-- End Date -->
+
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">วันที่คืนรถ</label>
-                        <input
-                            type="date"
-                            name="end_date"
-                            value="<?php echo htmlspecialchars($endDate); ?>"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            min="<?php echo date('Y-m-d'); ?>"
-                        />
+                        <label class="block text-sm font-semibold text-blue-800 mb-2">วันที่คืนรถ</label>
+                        <div class="relative">
+                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <input
+                                type="date"
+                                name="end_date"
+                                value="<?php echo htmlspecialchars($endDate); ?>"
+                                class="w-full pl-10 pr-4 py-3 border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                min="<?php echo date('Y-m-d'); ?>"
+                                required
+                            />
+                        </div>
                     </div>
-                    
-                    <!-- Submit Button -->
+
                     <div class="flex items-end">
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
-                            <i data-lucide="search" class="h-4 w-4"></i>
-                            ค้นหา
+                        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            ค้นหารถที่ว่าง
                         </button>
                     </div>
                 </div>
-                
-                <!-- Advanced Filters - Always Visible -->
-                <div class="border-t pt-4 mt-4">
+
+                <!-- Advanced Filters -->
+                <div class="border-t pt-6">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <!-- Search Input -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">ค้นหายี่ห้อ/รุ่น</label>
+                            <div class="relative">
+                                <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input
+                                    type="text"
+                                    name="search"
+                                    placeholder="เช่น Honda CBR, Yamaha..."
+                                    value="<?php echo htmlspecialchars($searchTerm); ?>"
+                                    class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        </div>
+
                         <!-- Brand Filter -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">ยี่ห้อ</label>
                             <select
                                 name="brand"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
                                 <option value="">ทุกยี่ห้อ</option>
                                 <?php foreach ($brands as $brand): ?>
-                                    <option 
-                                        value="<?php echo $brand; ?>"
-                                        <?php if ($selectedBrand == $brand) echo 'selected'; ?>
+                                    <option
+                                        value="<?php echo htmlspecialchars($brand); ?>"
+                                        <?php if ($selectedBrand == $brand) {
+                                                echo 'selected';
+                                            }
+                                        ?>
                                     >
-                                        <?php echo $brand; ?>
+                                        <?php echo htmlspecialchars($brand); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        
+
                         <!-- Type Filter -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">ขนาดเครื่อง</label>
                             <select
                                 name="type"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
                                 <option value="">ทุกขนาด</option>
                                 <?php foreach ($types as $key => $label): ?>
-                                    <option 
+                                    <option
                                         value="<?php echo $key; ?>"
-                                        <?php if ($selectedType == $key) echo 'selected'; ?>
+                                        <?php if ($selectedType == $key) {
+                                                echo 'selected';
+                                            }
+                                        ?>
                                     >
                                         <?php echo $label; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        
+
                         <!-- Price Range -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
-                                ราคาต่อวัน
+                                ราคาต่อวัน (บาท)
                             </label>
                             <div class="flex gap-2">
                                 <input
@@ -200,8 +315,9 @@ $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
                                     max="1000"
                                     placeholder="ต่ำสุด"
                                     value="<?php echo $priceRangeMin; ?>"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
+                                <span class="flex items-center text-gray-500">-</span>
                                 <input
                                     type="number"
                                     name="max_price"
@@ -209,209 +325,309 @@ $placeholderImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
                                     max="1000"
                                     placeholder="สูงสุด"
                                     value="<?php echo $priceRangeMax; ?>"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                             </div>
                         </div>
-                        
-                        <!-- Reset Button -->
-                        <div class="flex items-end">
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-between items-center mt-6">
+                        <div class="text-sm text-gray-600">
+                            <?php if ($startDate && $endDate): ?>
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span>เลือกวันที่: <?php echo date('d/m/Y', strtotime($startDate)); ?> - <?php echo date('d/m/Y', strtotime($endDate)); ?></span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="flex gap-3">
                             <a
                                 href="index.php?page=motorcycles"
-                                class="w-full text-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                                class="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
                             >
-                                <i data-lucide="refresh-cw" class="h-4 w-4"></i>
-                                รีเซ็ต
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                รีเซ็ตตัวกรอง
                             </a>
+                            <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                                ค้นหา
+                            </button>
                         </div>
                     </div>
                 </div>
+            </form>
+        </div>
+
+        <!-- Results Section -->
+        <div class="mb-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">รถที่พร้อมให้เช่า</h2>
+                    <p class="text-gray-600 mt-1">
+                        <?php if ($startDate && $endDate): ?>
+                            <span class="text-green-600 font-medium">
+                                <?php echo count($filteredMotorcycles); ?> คัน ว่างในช่วงวันที่เลือก
+                            </span>
+                        <?php else: ?>
+                            <span>กรุณาเลือกวันที่รับ-คืนรถเพื่อดูรถที่ว่าง</span>
+                        <?php endif; ?>
+                    </p>
+                </div>
+
             </div>
-        </form>
-
-
-        <!-- Results Summary -->
-        <div class="mb-6">
-            <p class="text-gray-600">
-                พบรถจักรยานยนต์ <?php echo count($filteredMotorcycles); ?> คัน
-                
-                <?php if ($startDate && $endDate): ?>
-                    <span class="ml-2 text-blue-600">
-                        สำหรับวันที่ <?php echo date('d/m/Y', strtotime($startDate)); ?> - <?php echo date('d/m/Y', strtotime($endDate)); ?>
-                    </span>
-                <?php endif; ?>
-            </p>
         </div>
 
         <!-- Error Message -->
         <?php if (isset($error_message)): ?>
-            <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-                <?php echo $error_message; ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- Debug Info -->
-        <?php if (empty($motorcycles_data)): ?>
-            <div class="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg mb-6">
-                <p>⚠️ ไม่พบข้อมูลรถจากระบบ กรุณาตรวจสอบการเชื่อมต่อ API</p>
-                <p class="text-sm mt-1">ลอง: <a href="test_motorcycles.php" class="underline">ทดสอบ API Motorcycles</a></p>
-            </div>
-        <?php endif; ?>
-
-        <!-- Motorcycles Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
-            <?php foreach ($filteredMotorcycles as $motorcycle): ?>
-                <div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
-                    <!-- Image -->
-                    <div class="relative h-48 bg-gray-200">
-                        <?php
-                        $imageUrl = $motorcycle['imageUrl'] ?? '';
-                        $hasValidImage = !empty($imageUrl) && filter_var($imageUrl, FILTER_VALIDATE_URL);
-                        ?>
-                        <img
-                            src="<?php echo $hasValidImage ? htmlspecialchars($imageUrl) : $placeholderImage; ?>"
-                            alt="<?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>"
-                            class="w-full h-full object-cover"
-                            onerror="this.onerror=null; this.src='<?php echo $placeholderImage; ?>';"
-                            loading="lazy"
-                        />
-                        <div class="absolute top-4 right-4">
-                            <?php
-                            $isAvailable = $motorcycle['isAvailable'] ?? false;
-                            $statusText = $isAvailable ? 'พร้อมใช้งาน' : 'ไม่ว่าง';
-                            $statusClass = $isAvailable ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-                            ?>
-                            <span class="px-2 py-1 rounded-full text-xs font-medium <?php echo $statusClass; ?>">
-                                <?php echo $statusText; ?>
-                            </span>
-                        </div>
+            <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
                     </div>
-                    <!-- Content -->
-                    <div class="p-6">
-                        <div class="flex justify-between items-start mb-2">
-                            <h3 class="text-xl font-bold text-gray-900">
-                                <?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>
-                            </h3>
-                            <div class="flex items-center">
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-4 text-sm text-gray-600 mb-4">
-                            <div class="flex items-center gap-1">
-                                <i data-lucide="fuel" class="h-4 w-4"></i>
-                                <span><?php echo $motorcycle['engineCc'] ?? 'N/A'; ?>cc</span>
-                            </div>
-                            <div class="flex items-center gap-1">
-                                <i data-lucide="calendar" class="h-4 w-4"></i>
-                                <span><?php echo $motorcycle['year'] ?? 'N/A'; ?></span>
-                            </div>
-                        </div>
-                        <!-- Description -->
-                        <div class="mb-4">
-                            <p class="text-gray-600 text-sm">
-                                <?php echo htmlspecialchars($motorcycle['description'] ?? 'รถจักรยานยนต์คุณภาพดี'); ?>
-                            </p>
-                        </div>
-                        <!-- Price and Action -->
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <span class="text-2xl font-bold text-blue-600">
-                                    ฿<?php echo number_format($motorcycle['pricePerDay'] ?? 0, 2); ?>
-                                </span>
-                                <span class="text-gray-600 text-sm">/วัน</span>
-                            </div>
-                            
-                            <?php 
-                            $isAvailable = $motorcycle['isAvailable'] ?? false;
-                            $canBook = $isAvailable;
-                            ?>
-
-                            <?php if ($canBook): ?>
-                                <a
-                                    href="index.php?page=booking&id=<?php echo $motorcycle['motorcycleId']; ?>"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                                >
-                                    จองเลย
-                                </a>
-                            <?php else: ?>
-                                <button
-                                    disabled
-                                    class="bg-gray-300 text-gray-500 px-6 py-2 rounded-lg font-medium cursor-not-allowed"
-                                >
-                                    ไม่ว่าง
-                                </button>
-                            <?php endif; ?>
-                        </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-red-700"><?php echo $error_message; ?></p>
                     </div>
                 </div>
-            <?php endforeach; ?>
-        </div>
-
-        <!-- No Results -->
-        <?php if (empty($filteredMotorcycles) && !empty($motorcycles_data)): ?>
-            <div class="text-center py-12">
-                <div class="text-gray-400 mb-4">
-                    <i data-lucide="calendar" class="h-16 w-16 mx-auto"></i>
-                </div>
-                <h3 class="text-xl font-medium text-gray-900 mb-2">ไม่พบรถที่ตรงกับเงื่อนไข</h3>
-                <p class="text-gray-600 mb-4">ลองปรับเปลี่ยนเงื่อนไขการค้นหาหรือเลือกวันที่อื่น</p>
-                <a
-                    href="index.php?page=motorcycles"
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-                >
-                    รีเซ็ตตัวกรอง
-                </a>
             </div>
         <?php endif; ?>
 
-        <!-- Special Offers -->
-        <div class="mt-12 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-lg p-8 text-center">
-            <h2 class="text-2xl font-bold text-white mb-4">โปรโมชั่นพิเศษ!</h2>
-            <div class="bg-white rounded-lg p-6 max-w-md mx-auto">
-                <div class="text-3xl font-bold text-orange-600 mb-2">เช่า <?php echo $promoDays; ?> วัน</div>
-                <div class="text-xl text-gray-800 mb-4">
-                    <span class="line-through text-gray-500"><?php echo number_format($promoData['normalPrice'], 0); ?> บาท</span>
-                    <span class="ml-2 text-green-600 font-bold"><?php echo number_format($promoData['finalPrice'], 0); ?> บาท</span>
+        <?php if (count($filteredMotorcycles) === 0): ?>
+
+            <!-- Date Selection Prompt -->
+            <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 text-center">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full shadow-sm mb-4">
+                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
                 </div>
-                <p class="text-gray-600 mb-4">
-                    <?php if ($promoData['discount'] > 0): ?>
-                        ประหยัด <?php echo $promoData['discount']; ?> บาท (ลด 50 บาท ทุกๆ 3 วัน)
-                    <?php else: ?>
-                        เช่าน้อยกว่า 3 วันยังไม่มีส่วนลด
-                    <?php endif; ?>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">กรุณาเลือกวันที่รับ-คืนรถ</h3>
+                <p class="text-gray-600 mb-6 max-w-md mx-auto">
+                    เลือกวันที่เพื่อดูรถจักรยานยนต์ที่ว่างในช่วงเวลาที่คุณต้องการ
                 </p>
-                <div class="flex items-center justify-center gap-2 text-sm text-gray-500">
-                    <i data-lucide="map-pin" class="h-4 w-4"></i>
-                    <span>บริการส่งรถถึงโรงแรม • คืนรถที่สนามบินหาดใหญ่</span>
+                <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                    <a href="#search-form" class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                        เลือกวันที่ตอนนี้
+                    </a>
+                    <a href="index.php?page=about" class="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                        ดูเงื่อนไขการเช่า
+                    </a>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
+        <?php elseif (count($filteredMotorcycles) === 0): ?>
+            <!-- No Results -->
+            <div class="text-center py-12">
+                <div class="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-6">
+                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-900 mb-2">ไม่พบรถที่ว่างในช่วงวันที่เลือก</h3>
+                <p class="text-gray-600 mb-6 max-w-md mx-auto">
+                    ลองเปลี่ยนวันที่หรือตัวกรองอื่นๆ หรือติดต่อเราเพื่อสอบถามรถที่ใกล้เคียง
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                    <a href="index.php?page=motorcycles" class="inline-flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                        รีเซ็ตตัวกรอง
+                    </a>
+                    <a href="index.php?page=contact" class="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                        ติดต่อสอบถาม
+                    </a>
+                </div>
+            </div>
+        <?php else: ?>
+            <!-- Motorcycles Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <?php foreach ($filteredMotorcycles as $motorcycle): ?>
+                    <?php
+                        $isAvailable   = true; // ผ่านการกรองมาแล้วว่าว่าง
+                        $motorcycleId  = $motorcycle['motorcycleId'] ?? '';
+                        $pricePerDay   = $motorcycle['pricePerDay'] ?? 0;
+                        $engineCc      = $motorcycle['engineCc'] ?? 0;
+                        $imageUrl      = $motorcycle['imageUrl'] ?? '';
+                        $hasValidImage = ! empty($imageUrl) && filter_var($imageUrl, FILTER_VALIDATE_URL);
 
-<script>
+                        // คำนวณราคารวม
+                        $totalDays = 1;
+                        if ($startDate && $endDate) {
+                            $start     = new DateTime($startDate);
+                            $end       = new DateTime($endDate);
+                            $totalDays = $start->diff($end)->days + 1;
+                        }
+                        $totalPrice = $totalDays * $pricePerDay;
+                    ?>
+
+                    <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                        <!-- Image & Badge -->
+                        <div class="relative h-56 bg-gradient-to-br from-gray-100 to-gray-200">
+                            <!-- Image -->
+                            <img
+                                src="<?php echo $hasValidImage ? htmlspecialchars($imageUrl) : $placeholderImage; ?>"
+                                alt="<?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>"
+                                class="w-full h-full object-cover"
+                                onerror="this.onerror=null; this.src='<?php echo $placeholderImage; ?>';"
+                                loading="lazy"
+                            />
+
+                            <!-- Availability Badge -->
+                            <div class="absolute top-4 left-4">
+                                <span class="px-3 py-1.5 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+                                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                    </svg>
+                                    ว่าง
+                                </span>
+                            </div>
+
+                            <!-- Engine CC Badge -->
+                            <div class="absolute top-4 right-4">
+                                <span class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold">
+                                    <?php echo number_format($engineCc); ?> cc
+                                </span>
+                            </div>
+
+                        </div>
+
+                        <!-- Content -->
+                        <div class="p-6">
+                            <!-- Title & Price -->
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <h3 class="text-xl font-bold text-gray-900">
+                                        <?php echo htmlspecialchars($motorcycle['brand'] . ' ' . $motorcycle['model']); ?>
+                                    </h3>
+                                    <p class="text-gray-600 text-sm mt-1">
+                                        ปี <?php echo $motorcycle['year'] ?? 'N/A'; ?>
+                                        <?php if (! empty($motorcycle['color'])): ?>
+                                            • สี <?php echo htmlspecialchars($motorcycle['color']); ?>
+                                        <?php endif; ?>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Description -->
+                            <?php if (! empty($motorcycle['description'])): ?>
+                                <p class="text-gray-600 text-sm mb-5 line-clamp-2">
+                                    <?php echo htmlspecialchars($motorcycle['description']); ?>
+                                </p>
+                            <?php endif; ?>
+
+                            <!-- Total Price & Action -->
+                            <div class="border-t pt-5">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <div class="text-sm text-gray-500">รวมทั้งสิ้น</div>
+                                        <div class="text-2xl font-bold text-green-600">
+                                            ฿<?php echo number_format($totalPrice, 0); ?>
+                                        </div>
+                                    </div>
+
+                                    <a
+                                        href="index.php?page=booking&id=<?php echo $motorcycleId; ?>&start_date=<?php echo urlencode($startDate); ?>&end_date=<?php echo urlencode($endDate); ?>"
+                                        class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
+                                    >
+                                        จองเลย
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+    </div>
+
+    <script>
+       function bookMotorcycle(motorcycleId){
+        // ดึงวันที่จากฟอร์มค้นหา
+        const startDate = document . getElementById('start_date') ?  . value;
+        const endDate   = document . getElementById('end_date') ?  . value;
+
+        // ส่งไปยังหน้า booking พร้อมพารามิเตอร์วันที่
+        let url = `index.php?page=booking&id=${motorcycleId}`;
+        if (startDate && endDate) {
+            url += `&start_date=${startDate}&end_date=${endDate}`;
+        }
+
+        window . location . href = url;
+    }
+
+
     document.addEventListener("DOMContentLoaded", function() {
+        // Set min date for date inputs
         const today = new Date().toISOString().split('T')[0];
         document.querySelectorAll('input[type="date"]').forEach(input => {
             input.min = today;
         });
-        
-        // ตรวจสอบวันที่เริ่มต้นและสิ้นสุด
+
+        // Date validation
         const startDateInput = document.querySelector('input[name="start_date"]');
         const endDateInput = document.querySelector('input[name="end_date"]');
-        
+
         if (startDateInput && endDateInput) {
             startDateInput.addEventListener('change', function() {
                 if (this.value) {
                     endDateInput.min = this.value;
+                    if (endDateInput.value && endDateInput.value < this.value) {
+                        endDateInput.value = this.value;
+                    }
                 }
             });
-            
+
             endDateInput.addEventListener('change', function() {
                 if (this.value && startDateInput.value && this.value < startDateInput.value) {
                     this.value = startDateInput.value;
                 }
             });
         }
+
+        // Price range validation
+        const minPriceInput = document.querySelector('input[name="min_price"]');
+        const maxPriceInput = document.querySelector('input[name="max_price"]');
+
+        if (minPriceInput && maxPriceInput) {
+            minPriceInput.addEventListener('change', function() {
+                if (parseInt(this.value) > parseInt(maxPriceInput.value)) {
+                    maxPriceInput.value = this.value;
+                }
+            });
+
+            maxPriceInput.addEventListener('change', function() {
+                if (parseInt(this.value) < parseInt(minPriceInput.value)) {
+                    minPriceInput.value = this.value;
+                }
+            });
+        }
+
+        // Smooth scroll to search form
+        const scrollToForm = document.querySelector('a[href="#search-form"]');
+        if (scrollToForm) {
+            scrollToForm.addEventListener('click', function(e) {
+                e.preventDefault();
+                const form = document.querySelector('.bg-white.rounded-2xl.shadow-xl');
+                if (form) {
+                    form.scrollIntoView({ behavior: 'smooth' });
+                    startDateInput?.focus();
+                }
+            });
+        }
     });
-</script>
+
+    // Format price input
+    function formatPrice(input) {
+        let value = input.value.replace(/[^\d]/g, '');
+        if (value) {
+            value = parseInt(value).toLocaleString('th-TH');
+        }
+        input.value = value;
+    }
+    </script>
+
+</body>
+</html>

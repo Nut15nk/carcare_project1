@@ -8,31 +8,31 @@
     // Check role: allow if employee or admin
     $isAdmin    = (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'admin@temptation.com');
     $isEmployee = (
-        (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'employee@temptation.com') ||
-        (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
+    (isset($_SESSION['user_email']) && $_SESSION['user_email'] === 'employee@temptation.com') ||
+    (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'employee')
     );
 
     if (! ($isAdmin || $isEmployee)) {
-        $_SESSION['flash_message'] = [
-            'type'    => 'error',
-            'message' => 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้',
-        ];
-        header('Location: index.php?page=home');
-        exit;
+    $_SESSION['flash_message'] = [
+        'type'    => 'error',
+        'message' => 'คุณไม่มีสิทธิ์เข้าถึงหน้านี้',
+    ];
+    header('Location: index.php?page=home');
+    exit;
     }
 
-    $section = $_GET['section'] ?? 'dashboard';
+    $section = $_GET['section'] ?? 'motorcycles';
 
     $pages = [
 
-        'bookings'    => 'pages/admin/sections/BookingManagement.php',
-        'motorcycles' => 'pages/admin/sections/MotorcyclesManagement.php',
-        'customers'   => 'pages/admin/sections/CustomersManagement.php',
-        'reports'     => 'pages/admin/sections/ReportsPage.php',
+    'bookings'    => 'pages/admin/sections/BookingManagement.php',
+    'motorcycles' => 'pages/admin/sections/MotorcyclesManagement.php',
+    'customers'   => 'pages/admin/sections/CustomersManagement.php',
+    'reports'     => 'pages/admin/sections/ReportsPage.php',
     ];
 
     if (! array_key_exists($section, $pages)) {
-        $section = 'dashboard';
+    $section = 'motorcycles';
     }
 
     $employeeContentFile = $pages[$section];

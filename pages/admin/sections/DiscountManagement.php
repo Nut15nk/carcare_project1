@@ -8,56 +8,56 @@
     /* ================= EDIT MODE ================= */
     $editDiscount = null;
     if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'edit') {
-        foreach ($allDiscounts as $d) {
-            if ($d['discountId'] === $_GET['id']) {
-                $editDiscount = $d;
-                break;
-            }
+    foreach ($allDiscounts as $d) {
+        if ($d['discountId'] === $_GET['id']) {
+            $editDiscount = $d;
+            break;
         }
+    }
     }
 
     /* ================= HANDLE FORM ================= */
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $action = $_GET['action'] ?? '';
+    $action = $_GET['action'] ?? '';
 
-        $data = [
-            'discountCode'  => strtoupper(trim($_POST['code'] ?? '')),
-            'discountType'  => $_POST['type'],
-            'discountValue' => floatval($_POST['value']),
-            'minDays'       => intval($_POST['min_days'] ?? 1),
-            'maxDiscount'   => ($_POST['max_discount'] ?? '') !== '' ? floatval($_POST['max_discount']) : null,
-            'startDate'     => $_POST['start_date'],
-            'endDate'       => $_POST['end_date'],
-            'usageLimit'    => ($_POST['usage_limit'] ?? '') !== '' ? intval($_POST['usage_limit']) : null,
-        ];
+    $data = [
+        'discountCode'  => strtoupper(trim($_POST['code'] ?? '')),
+        'discountType'  => $_POST['type'],
+        'discountValue' => floatval($_POST['value']),
+        'minDays'       => intval($_POST['min_days'] ?? 1),
+        'maxDiscount'   => ($_POST['max_discount'] ?? '') !== '' ? floatval($_POST['max_discount']) : null,
+        'startDate'     => $_POST['start_date'],
+        'endDate'       => $_POST['end_date'],
+        'usageLimit'    => ($_POST['usage_limit'] ?? '') !== '' ? intval($_POST['usage_limit']) : null,
+    ];
 
-        if ($action === 'create') {
-            AdminService::createDiscount($data);
-        }
+    if ($action === 'create') {
+        AdminService::createDiscount($data);
+    }
 
-        if ($action === 'edit' && isset($_POST['discount_id'])) {
-            AdminService::updateDiscount($_POST['discount_id'], $data);
-        }
+    if ($action === 'edit' && isset($_POST['discount_id'])) {
+        AdminService::updateDiscount($_POST['discount_id'], $data);
+    }
 
-        if ($action === 'delete' && isset($_POST['discount_id'])) {
-            AdminService::deleteDiscount($_POST['discount_id']);
-        }
+    if ($action === 'delete' && isset($_POST['discount_id'])) {
+        AdminService::deleteDiscount($_POST['discount_id']);
+    }
 
-        header('Location: index.php?page=admin&section=discounts');
-        exit;
+    header('Location: index.php?page=admin&section=discounts');
+    exit;
     }
 
     /* ================= STATS ================= */
     $now = time();
 
     $activeDiscounts = array_filter($allDiscounts, function ($d) use ($now) {
-        return strtotime($d['startDate']) <= $now
-        && strtotime($d['endDate']) >= $now
-            && $d['isActive'];
+    return strtotime($d['startDate']) <= $now
+    && strtotime($d['endDate']) >= $now
+        && $d['isActive'];
     });
 
     $expiredDiscounts = array_filter($allDiscounts, function ($d) use ($now) {
-        return strtotime($d['endDate']) < $now;
+    return strtotime($d['endDate']) < $now;
     });
 ?>
 
@@ -231,17 +231,18 @@
                         <tbody class="divide-y">
                             <?php foreach ($allDiscounts as $discount): ?>
                                 <?php
-                                    $discountId    = $discount['discountId'] ?? $discount['id'];
-                                    $discountCode  = $discount['discountCode'] ?? $discount['code'];
-                                    $discountType  = $discount['discountType'] ?? $discount['type'];
-                                    $discountValue = $discount['discountValue'] ?? $discount['value'];
-                                    $minDays       = $discount['minDays'] ?? $discount['min_days'] ?? 1;
-                                    $maxDiscount   = $discount['maxDiscount'] ?? $discount['max_discount'] ?? null;
-                                    $startDate     = $discount['startDate'] ?? $discount['start_date'];
-                                    $endDate       = $discount['endDate'] ?? $discount['end_date'];
-                                    $usageLimit    = $discount['usageLimit'] ?? $discount['usage_limit'] ?? null;
-                                    $usedCount     = $discount['usedCount'] ?? $discount['used_count'] ?? 0;
-                                    $isActive      = $discount['isActive'] ?? $discount['is_active'] ?? true;
+                                    $discountId        = $discount['discountId'] ?? $discount['id'];
+                                    $discountCode      = $discount['discountCode'] ?? $discount['code'];
+                                    $discountType      = $discount['discountType'] ?? $discount['type'];
+                                    $discountValue     = $discount['discountValue'] ?? $discount['value'];
+                                    $minDays           = $discount['minDays'] ?? $discount['min_days'] ?? 1;
+                                    $maxDiscount       = $discount['maxDiscount'] ?? $discount['max_discount'] ?? null;
+                                    $startDate         = $discount['startDate'] ?? $discount['start_date'];
+                                    $endDate           = $discount['endDate'] ?? $discount['end_date'];
+                                    $usageLimit        = $discount['usageLimit'] ?? $discount['usage_limit'] ?? null;
+                                    $usedCount         = $discount['usedCount'] ?? $discount['used_count'] ?? 0;
+                                    $isActive          = $discount['isActive'] ?? $discount['is_active'] ?? true;
+                                    $usageLimitReached = $usageLimit !== null && $usedCount >= $usageLimit;
 
                                     $isActiveStatus = strtotime($startDate) <= time() && time() <= strtotime($endDate) && $isActive;
                                     $isExpired      = time() > strtotime($endDate);
@@ -278,15 +279,32 @@
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-4 py-3">
-                                        <?php if ($isActiveStatus): ?>
-                                            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">ใช้งานได้</span>
+                                        <?php if ($usageLimitReached): ?>
+                                            <span class="inline-block px-3 py-1 bg-orange-100 text-orange-800 text-xs font-semibold rounded-full">
+                                                ใช้สิทธิ์ครบแล้ว
+                                            </span>
+
+                                        <?php elseif ($isActiveStatus): ?>
+                                            <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                                                ใช้งานได้
+                                            </span>
+
                                         <?php elseif ($isExpired): ?>
-                                            <span class="inline-block px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">หมดอายุ</span>
+                                            <span class="inline-block px-3 py-1 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                                                หมดอายุ
+                                            </span>
+
                                         <?php elseif ($isUpcoming): ?>
-                                            <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">เร็วๆ นี้</span>
+                                            <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
+                                                เร็วๆ นี้
+                                            </span>
+
                                         <?php else: ?>
-                                            <span class="inline-block px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full">ปิดใช้งาน</span>
+                                            <span class="inline-block px-3 py-1 bg-gray-100 text-gray-800 text-xs font-semibold rounded-full">
+                                                ปิดใช้งาน
+                                            </span>
                                         <?php endif; ?>
+
                                     </td>
                                     <td class="px-4 py-3">
                                         <div class="flex gap-2">
