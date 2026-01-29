@@ -1,16 +1,18 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 
-class AuthService {
+class AuthService
+{
 
     // --- ฟังก์ชัน Login (ของเดิม) ---
-    public static function login($email, $password) {
+    public static function login($email, $password)
+    {
         $db = Database::connect();
 
         $roles = [
             "customer" => "customers",
             "employee" => "employees",
-            "owner"    => "owners"
+            "owner"    => "owners",
         ];
 
         foreach ($roles as $role => $table) {
@@ -18,11 +20,11 @@ class AuthService {
             $stmt->execute([$email]);
             $user = $stmt->fetch();
 
-            if (!$user) {
-                continue; 
+            if (! $user) {
+                continue;
             }
 
-            if (!password_verify($password, $user['password_hash'])) {
+            if (! password_verify($password, $user['password_hash'])) {
                 throw new Exception("รหัสผ่านไม่ถูกต้อง");
             }
 
@@ -39,7 +41,8 @@ class AuthService {
     }
 
     // --- ฟังก์ชัน Register (ส่วนที่เพิ่มใหม่) ---
-    public static function register($data) {
+    public static function register($data)
+    {
         $db = Database::connect();
 
         // 1. เช็คก่อนว่าอีเมลซ้ำไหม? (เช็คในตาราง customers)
@@ -59,22 +62,33 @@ class AuthService {
             // 4. บันทึกลงฐานข้อมูล
             // หมายเหตุ: date_of_birth ใส่ NULL ไปก่อน เพราะในฟอร์มไม่มีให้กรอก
             $sql = "INSERT INTO customers (
-                        customer_id, email, password_hash, first_name, last_name, 
-                        phone, address,  date_of_birth, is_verified
-                    ) VALUES (
-                        :id, :email, :pass, :fname, :lname, 
-                        :phone, :address, NULL, 0
-                    )";
-
+                customer_id,
+                email,
+                password_hash,
+                first_name,
+                last_name,
+                phone,
+                line_id,
+                is_active
+            ) VALUES (
+                :id,
+                :email,
+                :pass,
+                :fname,
+                :lname,
+                :phone,
+                :line_id,
+                1
+            )";
             $stmt = $db->prepare($sql);
             $stmt->execute([
-                ':id'       => $newId,
-                ':email'    => $data['email'],
-                ':pass'     => $passwordHash,
-                ':fname'    => $data['firstName'],
-                ':lname'    => $data['lastName'],
-                ':phone'    => $data['phone'],
-                ':address'  => $data['address'],
+                ':id'      => $newId,
+                ':email'   => $data['email'],
+                ':pass'    => $passwordHash,
+                ':fname'   => $data['firstName'],
+                ':lname'   => $data['lastName'],
+                ':phone'   => $data['phone'],
+                ':line_id' => $data['lineId'],
             ]);
 
             // 5. Return ข้อมูลกลับเพื่อให้ Auto Login ได้เลย
@@ -83,7 +97,7 @@ class AuthService {
                 "email"     => $data['email'],
                 "role"      => "customer",
                 "firstName" => $data['firstName'],
-                "lastName"  => $data['lastName']
+                "lastName"  => $data['lastName'],
             ];
 
         } catch (PDOException $e) {
@@ -93,4 +107,3 @@ class AuthService {
         }
     }
 }
-?>

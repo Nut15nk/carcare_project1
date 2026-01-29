@@ -1,33 +1,33 @@
 <?php
-// เพิ่ม error reporting ที่ด้านบนสุด
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+    // เพิ่ม error reporting ที่ด้านบนสุด
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
 
-// pages/RegisterPage.php (Standalone page like login.php)
-session_start(); // start session for standalone page
+    // pages/RegisterPage.php (Standalone page like login.php)
+    session_start(); // start session for standalone page
 
-$error = '';
-$name = '';
-$email = '';
-$phone = '';
-$lineId = '';
-$password = '';
-$confirmPassword = '';
+    $error           = '';
+    $name            = '';
+    $email           = '';
+    $phone           = '';
+    $lineId          = '';
+    $password        = '';
+    $confirmPassword = '';
 
-// If user already logged in, redirect to profile/home
-if (isset($_SESSION['user'])) {
+    // If user already logged in, redirect to profile/home
+    if (isset($_SESSION['user'])) {
     header('Location: index.php');
     exit;
-}
+    }
 
-// Handle POST
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $name = $_POST['name'] ?? '';
-    $email = $_POST['email'] ?? '';
-    $phone = $_POST['phone'] ?? '';
-    $lineId = $_POST['lineId'] ?? '';
-    $password = $_POST['password'] ?? '';
+    // Handle POST
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $name            = $_POST['name'] ?? '';
+    $email           = $_POST['email'] ?? '';
+    $phone           = $_POST['phone'] ?? '';
+    $lineId          = $_POST['lineId'] ?? '';
+    $password        = $_POST['password'] ?? '';
     $confirmPassword = $_POST['confirmPassword'] ?? '';
 
     if (empty($name) || empty($email) || empty($phone) || empty($password)) {
@@ -39,39 +39,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         // โหลดไฟล์ API ด้วย path ที่ถูกต้อง
         $configFile = __DIR__ . '/config/config.php';
-        $authFile = __DIR__ . '/service/AuthService.php';
-        
+        $authFile   = __DIR__ . '/service/AuthService.php';
+
         error_log("Looking for config.php at: " . $configFile);
         error_log("Looking for auth.php at: " . $authFile);
-        
-        if (!file_exists($configFile)) {
+
+        if (! file_exists($configFile)) {
             $error = 'ไม่พบไฟล์ config.php กรุณาติดต่อผู้ดูแล';
             error_log("ERROR: config.php not found at: " . $configFile);
-        } elseif (!file_exists($authFile)) {
+        } elseif (! file_exists($authFile)) {
             $error = 'ไม่พบไฟล์ auth.php กรุณาติดต่อผู้ดูแล';
             error_log("ERROR: auth.php not found at: " . $authFile);
         } else {
             try {
                 require_once $configFile;
                 require_once $authFile;
-                
+
                 error_log("✅ Files loaded successfully");
-                
+
                 // ใช้ API จริงแทน mock data
                 $userData = [
-                    'email' => $email,
-                    'password' => $password,
+                    'email'           => $email,
+                    'password'        => $password,
                     'confirmPassword' => $confirmPassword,
-                    'firstName' => explode(' ', $name)[0] ?? $name,
-                    'lastName' => explode(' ', $name)[1] ?? '',
-                    'phone' => $phone,
-                    'address' => $lineId ? "Line ID: {$lineId}" : '',
+                    'firstName'       => explode(' ', $name)[0] ?? $name,
+                    'lastName'        => explode(' ', $name)[1] ?? '',
+                    'phone'           => $phone,
+                    'lineId'          => $lineId ?: null,
+
                 ];
-                
+
                 error_log("Attempting register with data: " . print_r($userData, true));
-                
+
                 $user = AuthService::register($userData);
-                
+
                 if ($user) {
                     error_log("✅ Register successful, user data: " . print_r($user, true));
                     $_SESSION['user'] = $user;
@@ -87,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
-}
+    }
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -113,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <div class="bg-white py-8 px-6 shadow-lg rounded-lg">
           <form class="space-y-6" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
-              <?php if (!empty($error)): ?>
+              <?php if (! empty($error)): ?>
                   <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                       <div class="flex items-center">
                           <i data-lucide="alert-circle" class="h-5 w-5 mr-2"></i>
@@ -260,13 +261,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           form.addEventListener('submit', function(e) {
               const password = document.getElementById('password').value;
               const confirmPassword = document.getElementById('confirmPassword').value;
-              
+
               if (password.length < 6) {
                   e.preventDefault();
                   alert('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
                   return false;
               }
-              
+
               if (password !== confirmPassword) {
                   e.preventDefault();
                   alert('รหัสผ่านไม่ตรงกัน');

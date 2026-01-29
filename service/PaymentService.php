@@ -364,7 +364,7 @@ class PaymentService
             // 🔥 สำคัญที่สุด (Windows ต้องมี)
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_CAINFO         => 'C:/php/extras/ssl/cacert.pem',
+            CURLOPT_CAINFO         => 'C:/Program Files/php-8.4.14/extras/ssl/cacert.pem',
         ]);
 
         $response = curl_exec($ch);
