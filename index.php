@@ -45,7 +45,7 @@
     'home'                 => 'pages/HomePages.php',
     'motorcycles'          => 'pages/MotorcyclesPages.php',
     'booking'              => 'pages/BookingPages.php',
-    'booking-confirmation' => 'pages/BookingConfirmation.php',
+    'booking-confirmation' => 'pages/TrackingPage.php',
     'payment'              => 'pages/PaymentPages.php',
     'my-bookings'          => 'pages/MyBookings.php',
     'profile'              => 'pages/ProfilePages.php',

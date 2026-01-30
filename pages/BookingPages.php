@@ -277,7 +277,7 @@
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">ส่วนลด:</span>
-                                <span id="calc-discount" class="font-medium text-green-600">฿0.00</span>
+                                <span id="calc-discount" class="font-medium text-red-600">฿0.00</span>
                             </div>
                             <div class="flex justify-between">
                                 <span class="text-gray-600">ราคาสุทธิ:</span>
