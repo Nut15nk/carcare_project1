@@ -3,8 +3,7 @@ require_once __DIR__ . '/../config/config.php';
 
 class AuthService
 {
-
-    // --- ฟังก์ชัน Login (ของเดิม) ---
+    // --- ฟังก์ชัน Login (แก้ไขใหม่) ---
     public static function login($email, $password)
     {
         $db = Database::connect();
@@ -24,9 +23,28 @@ class AuthService
                 continue;
             }
 
+            // ตรวจสอบรหัสผ่าน
             if (! password_verify($password, $user['password_hash'])) {
                 throw new Exception("รหัสผ่านไม่ถูกต้อง");
             }
+
+            // สำหรับลูกค้า (customers) ต้องตรวจสอบ is_active
+            if ($role === "customer") {
+                $isActive = $user['is_active'] ?? 1;
+                if ($isActive == 0) {
+                    throw new Exception("บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ");
+                }
+            }
+
+            // สำหรับพนักงาน (employees) ต้องตรวจสอบ is_active
+            if ($role === "employee") {
+                $isActive = $user['is_active'] ?? 1;
+                if ($isActive == 0) {
+                    throw new Exception("บัญชีพนักงานถูกระงับการใช้งาน");
+                }
+            }
+
+            // สำหรับเจ้าของร้าน (owners) ไม่ต้องตรวจสอบ is_active เพราะไม่มี field นี้ในตาราง owners
 
             return [
                 "id"        => $user[$role . "_id"],
@@ -60,7 +78,6 @@ class AuthService
 
         try {
             // 4. บันทึกลงฐานข้อมูล
-            // หมายเหตุ: date_of_birth ใส่ NULL ไปก่อน เพราะในฟอร์มไม่มีให้กรอก
             $sql = "INSERT INTO customers (
                 customer_id,
                 email,

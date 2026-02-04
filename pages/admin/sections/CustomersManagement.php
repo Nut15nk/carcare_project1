@@ -12,15 +12,15 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-800">จัดการลูกค้า</h1>
-            <p class="text-gray-600 mt-1">ดูข้อมูลลูกค้า ประวัติการจอง และพฤติกรรมการใช้งาน</p>
+            <p class="text-gray-600 mt-1">ดูข้อมูลลูกค้า ประวัติการจอง และจัดการการเข้าถึงระบบ</p>
         </div>
-        
+
         <div class="flex items-center gap-3">
             <!-- Search Input -->
             <div class="relative">
-                <input type="text" 
+                <input type="text"
                        id="searchCustomer"
-                       placeholder="ค้นหาลูกค้า..." 
+                       placeholder="ค้นหาลูกค้า..."
                        class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
                 <svg class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
@@ -44,15 +44,15 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-xl p-5">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-sm text-green-700 font-medium">กำลังใช้งาน</p>
                     <p class="text-2xl font-bold text-green-800 mt-1">
-                        <?php 
+                        <?php
                             $activeCustomers = array_filter($customers, fn($c) => ($c['isActive'] ?? 1) == 1);
-                            echo count($activeCustomers); 
+                            echo count($activeCustomers);
                         ?>
                     </p>
                 </div>
@@ -63,29 +63,26 @@
                 </div>
             </div>
         </div>
-        
-        <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-5">
+
+        <div class="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-5">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-purple-700 font-medium">เฉลี่ยการจอง</p>
-                    <p class="text-2xl font-bold text-purple-800 mt-1">
+                    <p class="text-sm text-red-700 font-medium">ถูกแบน</p>
+                    <p class="text-2xl font-bold text-red-800 mt-1">
                         <?php
-                            $totalBookings = 0;
-                            foreach ($customers as $c) {
-                                $totalBookings += ($c['totalBookings'] ?? 0);
-                            }
-                            echo $totalBookings > 0 ? round($totalBookings / count($customers), 1) : '0';
+                            $bannedCustomers = array_filter($customers, fn($c) => ($c['isActive'] ?? 1) == 0);
+                            echo count($bannedCustomers);
                         ?>
                     </p>
                 </div>
-                <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
                     </svg>
                 </div>
             </div>
         </div>
-        
+
         <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-xl p-5">
             <div class="flex items-center justify-between">
                 <div>
@@ -93,7 +90,7 @@
                     <p class="text-2xl font-bold text-yellow-800 mt-1">
                         <?php
                             $currentMonth = date('Y-m');
-                            $newThisMonth = array_filter($customers, function($c) use ($currentMonth) {
+                            $newThisMonth = array_filter($customers, function ($c) use ($currentMonth) {
                                 return date('Y-m', strtotime($c['createdAt'])) === $currentMonth;
                             });
                             echo count($newThisMonth);
@@ -131,16 +128,6 @@
                         <p class="text-sm text-gray-600 mt-1">
                             <?php echo count($customers); ?> คน
                         </p>
-                    </div>
-                    
-                    <div class="flex items-center space-x-2">
-                        <!-- Export Button -->
-                        <button class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            ส่งออก
-                        </button>
                     </div>
                 </div>
             </div>
@@ -191,7 +178,7 @@
                                         </div>
                                     </div>
                                 </td>
-                                
+
                                 <!-- Contact Info -->
                                 <td class="px-6 py-4">
                                     <div class="space-y-2">
@@ -207,15 +194,23 @@
                                             </svg>
                                             <?php echo htmlspecialchars($c['phone'] ?? 'ไม่มีข้อมูล'); ?>
                                         </div>
+                                        <?php if (! empty($c['line_id'])): ?>
+                                        <div class="flex items-center text-sm text-gray-900">
+                                            <svg class="w-4 h-4 mr-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                            </svg>
+                                            <?php echo htmlspecialchars($c['line_id']); ?>
+                                        </div>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
-                                
+
                                 <!-- Statistics -->
                                 <td class="px-6 py-4">
                                     <div class="space-y-2">
                                         <div class="flex items-center justify-between text-sm">
                                             <span class="text-gray-600">การจอง:</span>
-                                            <span class="font-semibold"><?php echo ($c['totalBookings'] ?? 0); ?> ครั้ง</span>
+                                            <span class="font-semibold"><?php echo($c['totalBookings'] ?? 0); ?> ครั้ง</span>
                                         </div>
                                         <div class="flex items-center justify-between text-sm">
                                             <span class="text-gray-600">ยอดใช้จ่าย:</span>
@@ -223,7 +218,7 @@
                                         </div>
                                     </div>
                                 </td>
-                                
+
                                 <!-- Status -->
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <?php if (($c['isActive'] ?? 1) == 1): ?>
@@ -236,13 +231,13 @@
                                     <?php else: ?>
                                         <span class="px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">
                                             <svg class="w-3 h-3 inline-block mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                                <path fill-rule="evenodd" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" clip-rule="evenodd"></path>
                                             </svg>
-                                            ปิดใช้งาน
+                                            ถูกแบน
                                         </span>
                                     <?php endif; ?>
                                 </td>
-                                
+
                                 <!-- Actions -->
                                 <td class="px-6 py-4 whitespace-nowrap text-right">
                                     <div class="flex items-center justify-end space-x-2">
@@ -262,7 +257,7 @@
                 </table>
             </div>
 
-            <?php if (!empty($customers)): ?>
+            <?php if (! empty($customers)): ?>
                 <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between text-sm text-gray-600 gap-4">
                         <div>
@@ -274,7 +269,7 @@
                                 ใช้งาน
                                 <span class="mx-2">•</span>
                                 <span class="w-3 h-3 rounded-full bg-red-100 mr-1"></span>
-                                ปิดใช้งาน
+                                ถูกแบน
                             </span>
                         </div>
                     </div>
@@ -304,7 +299,7 @@
                         <p id="modal-customer-id" class="text-blue-100 text-sm font-mono"></p>
                     </div>
                 </div>
-                <button onclick="closeCustomerModal()" 
+                <button onclick="closeCustomerModal()"
                         class="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -321,8 +316,11 @@
         </div>
 
         <!-- Modal Footer -->
-        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
-            <button onclick="closeCustomerModal()" 
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+            <div id="ban-button-container">
+                <!-- ปุ่มแบน/ยกเลิกการแบน จะถูกใส่ตรงนี้โดย JavaScript -->
+            </div>
+            <button onclick="closeCustomerModal()"
                     class="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
                 ปิด
             </button>
@@ -371,18 +369,6 @@ function formatDate(dateStr) {
     });
 }
 
-function formatDateTime(dateStr) {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('th-TH', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
 function openCustomerModal(customerId) {
     fetch('/pages/api/admin/customer_detail.php?id=' + customerId)
         .then(res => res.json())
@@ -398,6 +384,25 @@ function openCustomerModal(customerId) {
             // Update modal title
             document.getElementById('modal-customer-id').textContent = p.customerId;
 
+            // สร้างปุ่มแบน/ยกเลิกการแบน
+            const banButtonHtml = p.isActive == 1 ?
+                `<button onclick="toggleCustomerStatus('${p.customerId}', 'ban')"
+                        class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                    </svg>
+                    แบนลูกค้า
+                </button>` :
+                `<button onclick="toggleCustomerStatus('${p.customerId}', 'unban')"
+                        class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    ยกเลิกการแบน
+                </button>`;
+
+            document.getElementById('ban-button-container').innerHTML = banButtonHtml;
+
             // Prepare customer details HTML
             document.getElementById('customer-detail').innerHTML = `
                 <!-- Profile Section -->
@@ -409,7 +414,7 @@ function openCustomerModal(customerId) {
                                 ${p.firstName?.charAt(0) || ''}${p.lastName?.charAt(0) || ''}
                             </span>
                         </div>
-                        
+
                         <!-- Basic Info -->
                         <div class="flex-1">
                             <h4 class="text-xl font-bold text-gray-800 mb-2">
@@ -429,6 +434,14 @@ function openCustomerModal(customerId) {
                                         </svg>
                                         ${p.phone || 'ไม่มีข้อมูล'}
                                     </div>
+                                    ${p.lineId ? `
+                                    <div class="flex items-center text-gray-600">
+                                        <svg class="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                                        </svg>
+                                        Line ID: ${p.lineId}
+                                    </div>
+                                    ` : ''}
                                 </div>
                                 <div class="space-y-2">
                                     <div class="flex items-center text-gray-600">
@@ -446,12 +459,12 @@ function openCustomerModal(customerId) {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Status Badge -->
                         <div>
-                            ${p.isActive == 1 ? 
+                            ${p.isActive == 1 ?
                                 '<span class="px-4 py-2 bg-green-100 text-green-700 rounded-full font-medium">ใช้งานอยู่</span>' :
-                                '<span class="px-4 py-2 bg-red-100 text-red-700 rounded-full font-medium">ปิดใช้งาน</span>'
+                                '<span class="px-4 py-2 bg-red-100 text-red-700 rounded-full font-medium">ถูกแบน</span>'
                             }
                         </div>
                     </div>
@@ -465,29 +478,27 @@ function openCustomerModal(customerId) {
                             <div class="text-3xl font-bold text-blue-800">${p.totalBookings || 0}</div>
                         </div>
                     </div>
-                    
+
                     <div class="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-xl p-5">
                         <div class="text-center">
                             <div class="text-sm text-green-700 font-medium mb-2">ยอดใช้จ่ายรวม</div>
                             <div class="text-3xl font-bold text-green-800">฿${Number(p.totalSpent || 0).toLocaleString()}</div>
                         </div>
                     </div>
-                    
-                    <div class="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-5">
+
+                    <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-xl p-5">
                         <div class="text-center">
-                            <div class="text-sm text-purple-700 font-medium mb-2">ค่าเฉลี่ย/จอง</div>
-                            <div class="text-3xl font-bold text-purple-800">
-                                ฿${p.totalBookings > 0 ? Math.round(p.totalSpent / p.totalBookings).toLocaleString() : 0}
-                            </div>
+                            <div class="text-sm text-emerald-700 font-medium mb-2">สำเร็จ</div>
+                            <div class="text-3xl font-bold text-emerald-800">${p.successful_bookings || 0}</div>
+                            <div class="text-xs text-emerald-600 mt-1">รายการ</div>
                         </div>
                     </div>
-                    
-                    <div class="bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 rounded-xl p-5">
+
+                    <div class="bg-gradient-to-br from-rose-50 to-rose-100 border border-rose-200 rounded-xl p-5">
                         <div class="text-center">
-                            <div class="text-sm text-yellow-700 font-medium mb-2">ระยะเวลาเฉลี่ย</div>
-                            <div class="text-3xl font-bold text-yellow-800">
-                                ${p.avgDays || 0} วัน
-                            </div>
+                            <div class="text-sm text-rose-700 font-medium mb-2">ไม่สำเร็จ</div>
+                            <div class="text-3xl font-bold text-rose-800">${p.failed_bookings || 0}</div>
+                            <div class="text-xs text-rose-600 mt-1">รายการ</div>
                         </div>
                     </div>
                 </div>
@@ -500,8 +511,8 @@ function openCustomerModal(customerId) {
                         </svg>
                         ประวัติการจอง (${list.length})
                     </h4>
-                    
-                    ${list.length > 0 ? 
+
+                    ${list.length > 0 ?
                         `<div class="space-y-4">
                             ${list.sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
                                 .map(r => `
@@ -514,13 +525,13 @@ function openCustomerModal(customerId) {
                                                 </div>
                                             </div>
                                             <div class="flex items-center space-x-3">
-                                                <span class="px-3 py-1 rounded-full ${r.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                                                                                        r.status === 'confirmed' ? 'bg-blue-100 text-blue-800' : 
-                                                                                        r.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                                                <span class="px-3 py-1 rounded-full ${r.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                                                        r.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                                                                                        r.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
                                                                                         'bg-red-100 text-red-800'} text-xs font-medium">
-                                                    ${r.status === 'completed' ? 'เสร็จสิ้น' : 
-                                                     r.status === 'confirmed' ? 'ยืนยันแล้ว' : 
-                                                     r.status === 'pending' ? 'รอดำเนินการ' : 
+                                                    ${r.status === 'completed' ? 'เสร็จสิ้น' :
+                                                     r.status === 'confirmed' ? 'ยืนยันแล้ว' :
+                                                     r.status === 'pending' ? 'รอดำเนินการ' :
                                                      'ยกเลิก'}
                                                 </span>
                                                 <div class="font-bold text-lg text-green-600">
@@ -528,13 +539,13 @@ function openCustomerModal(customerId) {
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                             <div class="space-y-2">
                                                 <div class="text-gray-600">การชำระเงิน</div>
                                                 <div class="font-medium">
-                                                    ${r.payment_status === 'paid' ? 
-                                                        '<span class="text-green-600">ชำระแล้ว</span>' : 
+                                                    ${r.payment_status === 'paid' ?
+                                                        '<span class="text-green-600">ชำระแล้ว</span>' :
                                                         '<span class="text-yellow-600">ยังไม่ชำระ</span>'}
                                                 </div>
                                             </div>
@@ -545,8 +556,8 @@ function openCustomerModal(customerId) {
                                             <div class="md:col-span-2 space-y-2">
                                                 <div class="text-gray-600">สถานที่นัดรับรถ</div>
                                                 <div class="font-medium">${r.pickup_location || 'ยังไม่ได้ระบุ'}</div>
-                                                ${r.pickup_details ? 
-                                                    `<div class="text-sm text-gray-500 mt-1">${r.pickup_details}</div>` : 
+                                                ${r.pickup_details ?
+                                                    `<div class="text-sm text-gray-500 mt-1">${r.pickup_details}</div>` :
                                                     ''}
                                             </div>
                                             ${r.return_location || r.return_details ? `
@@ -562,7 +573,7 @@ function openCustomerModal(customerId) {
                                     </div>
                                 `).join('')
                             }
-                        </div>` : 
+                        </div>` :
                         `<div class="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-2xl p-8 text-center">
                             <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -578,7 +589,7 @@ function openCustomerModal(customerId) {
 
             // Show modal
             document.getElementById('customer-modal').classList.remove('hidden');
-            
+
             // Prevent body scroll
             document.body.style.overflow = 'hidden';
         })
@@ -591,6 +602,8 @@ function openCustomerModal(customerId) {
 function closeCustomerModal() {
     document.getElementById('customer-modal').classList.add('hidden');
     document.body.style.overflow = 'auto';
+    // เคลียร์ปุ่มแบนเมื่อปิด modal
+    document.getElementById('ban-button-container').innerHTML = '';
 }
 
 // Close modal when clicking outside
@@ -604,16 +617,64 @@ document.getElementById('customer-modal').addEventListener('click', function(e) 
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('searchCustomer');
     const rows = document.querySelectorAll('tbody tr');
-    
+
     function filterTable() {
         const searchValue = searchInput.value.toLowerCase();
-        
+
         rows.forEach(row => {
             const searchMatch = !searchValue || row.getAttribute('data-search').includes(searchValue);
             row.style.display = searchMatch ? '' : 'none';
         });
     }
-    
+
     searchInput?.addEventListener('input', filterTable);
 });
+
+// Function to toggle customer status (ban/unban)
+function toggleCustomerStatus(customerId, action) {
+    const actionText = action === 'ban' ? 'แบนลูกค้า' : 'ยกเลิกการแบนลูกค้า';
+    const confirmText = action === 'ban'
+        ? 'คุณแน่ใจว่าต้องการแบนลูกค้ารายนี้? ลูกค้าจะไม่สามารถเข้าสู่ระบบได้อีก'
+        : 'คุณแน่ใจว่าต้องการยกเลิกการแบนลูกค้ารายนี้? ลูกค้าจะสามารถเข้าสู่ระบบได้อีกครั้ง';
+
+    if (!confirm(confirmText)) {
+        return;
+    }
+
+    // Show loading
+    const button = event.target.closest('button');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>กำลังดำเนินการ...';
+    button.disabled = true;
+
+    fetch('/pages/api/admin/toggle_customer_status.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            customerId: customerId,
+            action: action
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            // ปิด modal และ reload หน้า
+            closeCustomerModal();
+            location.reload();
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + (data.message || 'ไม่สามารถดำเนินการได้'));
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
 </script>

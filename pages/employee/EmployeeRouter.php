@@ -78,15 +78,7 @@
                     จัดการลูกค้า
                 </a>
 
-                <!-- Reports (Admin only) -->
                 <?php if ($isAdmin): ?>
-                <a
-                    href="index.php?page=employee&section=reports"
-                    class="px-3 py-2 font-medium text-sm rounded-t-lg                                                                      <?php echo($section === 'reports') ? 'bg-blue-600 text-white' : 'text-gray-600 hover:text-gray-900'; ?>"
-                >
-                    <i data-lucide="file-text" class="inline h-4 w-4 mr-2"></i>
-                    รายงาน
-                </a>
                 <?php endif; ?>
             </nav>
         </div>

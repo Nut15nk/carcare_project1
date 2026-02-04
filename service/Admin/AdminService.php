@@ -12,10 +12,54 @@ class AdminService
 
     /* ===================== DASHBOARD ===================== */
 
+    /* ===================== DASHBOARD ===================== */
+
     public static function getDashboardStats(): array
     {
         $db = self::db();
 
+        // 1. คำนวณรายได้รวมจาก payments ที่ชำระเงินแล้ว
+        // ตรวจสอบว่า payments มีข้อมูลหรือไม่
+        $totalRevenueQuery = $db->query("
+        SELECT
+            COALESCE(SUM(p.amount), 0) as total_revenue,
+            COUNT(*) as total_payments,
+            MIN(amount) as min_amount,
+            MAX(amount) as max_amount
+        FROM payments p
+        WHERE p.payment_status IN ('paid', 'verified')
+        AND p.amount > 0
+    ");
+
+        $revenueResult = $totalRevenueQuery->fetch(\PDO::FETCH_ASSOC);
+        $totalRevenue  = (float) ($revenueResult['total_revenue'] ?? 0);
+
+        // Debug log
+        error_log("Dashboard Revenue - จาก payments: " . $totalRevenue . " (จำนวน: " . ($revenueResult['total_payments'] ?? 0) . ")");
+
+        // 2. ถ้ารายได้น้อยเกินไป ให้คำนวณจาก reservations (backup)
+        if ($totalRevenue < 1000) {
+            $backupQuery = $db->query("
+            SELECT COALESCE(SUM(r.final_price), 0) as backup_revenue
+            FROM reservations r
+            WHERE r.status IN ('completed', 'confirmed', 'active')
+            AND EXISTS (
+                SELECT 1 FROM payments p
+                WHERE p.reservation_id = r.reservation_id
+                AND p.payment_status IN ('paid', 'verified')
+            )
+        ");
+
+            $backupResult  = $backupQuery->fetch(\PDO::FETCH_ASSOC);
+            $backupRevenue = (float) ($backupResult['backup_revenue'] ?? 0);
+
+            error_log("Dashboard Revenue - จาก reservations (backup): " . $backupRevenue);
+
+            // ใช้ค่าที่มากกว่า
+            $totalRevenue = max($totalRevenue, $backupRevenue);
+        }
+
+        // 3. ข้อมูลอื่นๆ
         return [
             'totalBookings'        => (int) $db
                 ->query("SELECT COUNT(*) FROM reservations")
@@ -33,14 +77,7 @@ class AdminService
             ")
                 ->fetchColumn(),
 
-            'totalRevenue'         => (float) $db
-                ->query("
-                SELECT COALESCE(SUM(r.final_price), 0)
-                FROM reservations r
-                JOIN payments p ON p.reservation_id = r.reservation_id
-                WHERE p.payment_status = 'paid'
-            ")
-                ->fetchColumn(),
+            'totalRevenue'         => $totalRevenue,
 
             'availableMotorcycles' => (int) $db
                 ->query("
@@ -488,21 +525,23 @@ class AdminService
         $db = self::db();
 
         $stmt = $db->query("
-            SELECT
-                motorcycle_id      AS motorcycleId,
-                brand,
-                model,
-                year,
-                license_plate      AS licensePlate,
-                color,
-                price_per_day      AS pricePerDay,
-                description,
-                is_available       AS isAvailable,
-                maintenance_status AS maintenanceStatus,
-                created_at
-            FROM motorcycles
-            ORDER BY created_at DESC
-        ");
+        SELECT
+            motorcycle_id      AS motorcycleId,
+            brand,
+            model,
+            year,
+            license_plate      AS licensePlate,
+            color,
+            engine_cc as engineCc,
+            price_per_day      AS pricePerDay,
+            description,
+            is_available       AS isAvailable,
+            maintenance_status AS maintenanceStatus,
+            image_url          AS imageUrl,
+            created_at
+        FROM motorcycles
+        ORDER BY created_at DESC
+    ");
 
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
@@ -519,10 +558,13 @@ class AdminService
                 year,
                 license_plate,
                 color,
+                engine_cc,
                 price_per_day,
                 description,
                 is_available,
-                maintenance_status
+                maintenance_status,
+                image_url
+
             ) VALUES (
                 :id,
                 :brand,
@@ -530,10 +572,12 @@ class AdminService
                 :year,
                 :license_plate,
                 :color,
+                :engine_cc,
                 :price_per_day,
                 :description,
                 :is_available,
-                :maintenance_status
+                :maintenance_status,
+                :image_url
             )
         ");
 
@@ -544,10 +588,12 @@ class AdminService
             ':year'               => $data['year'],
             ':license_plate'      => $data['license_plate'],
             ':color'              => $data['color'],
+            ':engine_cc'          => $data['engine_cc'] ?? 0,
             ':price_per_day'      => $data['price_per_day'],
             ':description'        => $data['description'] ?? null,
             ':is_available'       => ! empty($data['is_available']) ? 1 : 0,
             ':maintenance_status' => strtoupper($data['maintenance_status'] ?? 'READY'),
+            ':image_url'          => $data['image_url'] ?? null,
         ]);
     }
 
@@ -555,33 +601,45 @@ class AdminService
     {
         $db = self::db();
 
-        $stmt = $db->prepare("
-            UPDATE motorcycles
-            SET
-                brand = :brand,
-                model = :model,
-                year = :year,
-                license_plate = :license_plate,
-                color = :color,
-                price_per_day = :price_per_day,
-                description = :description,
-                is_available = :is_available,
-                maintenance_status = :maintenance_status
-            WHERE motorcycle_id = :id
-        ");
+        $fields = "
+        brand = :brand,
+        model = :model,
+        year = :year,
+        license_plate = :license_plate,
+        color = :color,
+        engine_cc = :engine_cc,
+        price_per_day = :price_per_day,
+        description = :description,
+        is_available = :is_available,
+        maintenance_status = :maintenance_status
+    ";
 
-        $stmt->execute([
+        $params = [
             ':id'                 => $id,
             ':brand'              => $data['brand'],
             ':model'              => $data['model'],
             ':year'               => $data['year'],
             ':license_plate'      => $data['license_plate'],
             ':color'              => $data['color'],
+            ':engine_cc'          => $data['engine_cc'] ?? 0,
             ':price_per_day'      => $data['price_per_day'],
             ':description'        => $data['description'] ?? null,
-            ':is_available'       => ! empty($data['is_available']) ? 1 : 0,
+            ':is_available'       => 1,
             ':maintenance_status' => strtoupper($data['maintenance_status'] ?? 'READY'),
-        ]);
+        ];
+
+        if (isset($data['image_url'])) {
+            $fields               .= ", image_url = :image_url";
+            $params[':image_url']  = $data['image_url'];
+        }
+
+        $stmt = $db->prepare("
+        UPDATE motorcycles
+        SET {$fields}
+        WHERE motorcycle_id = :id
+    ");
+
+        $stmt->execute($params);
     }
 
     public static function deleteMotorcycle(string $id): void
@@ -609,65 +667,18 @@ class AdminService
             c.last_name     AS lastName,
             c.email,
             c.phone,
+            c.line_id       AS line_id,
             c.is_active     AS isActive,
             c.created_at    AS createdAt,
             COUNT(r.reservation_id) AS totalBookings,
             COALESCE(SUM(r.final_price), 0) AS totalSpent
         FROM customers c
         LEFT JOIN reservations r ON r.customer_id = c.customer_id
-        GROUP BY c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.is_active, c.created_at
+        GROUP BY c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.line_id, c.is_active, c.created_at
         ORDER BY c.created_at DESC
     ");
 
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
-    }
-
-    /* ===================== CUSTOMER PROFILE ===================== */
-
-    public static function getCustomerProfile(string $customerId): array
-    {
-        $db = self::db();
-
-        $stmt = $db->prepare("
-        SELECT
-            c.customer_id   AS customerId,
-            c.first_name    AS firstName,
-            c.last_name     AS lastName,
-            c.email,
-            c.phone,
-            c.is_active     AS isActive,
-            c.created_at    AS createdAt,
-            COUNT(r.reservation_id) AS totalBookings,
-            COALESCE(SUM(r.final_price), 0) AS totalSpent,
-            MAX(r.created_at) AS lastBookingAt,
-            COALESCE(AVG(r.total_days), 0) AS avgDays
-        FROM customers c
-        LEFT JOIN reservations r ON r.customer_id = c.customer_id
-        WHERE c.customer_id = ?
-        GROUP BY c.customer_id
-        LIMIT 1
-    ");
-
-        $stmt->execute([$customerId]);
-        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
-
-        if (! $result) {
-            return [
-                'customerId'    => $customerId,
-                'firstName'     => '',
-                'lastName'      => '',
-                'email'         => '',
-                'phone'         => '',
-                'isActive'      => 1,
-                'createdAt'     => '',
-                'totalBookings' => 0,
-                'totalSpent'    => 0,
-                'lastBookingAt' => null,
-                'avgDays'       => 0,
-            ];
-        }
-
-        return $result;
     }
 
     /* ===================== CUSTOMER RESERVATIONS ===================== */
@@ -826,8 +837,7 @@ class AdminService
         return $stmt->execute([$discountId]);
     }
 
-    /* ===================== REPORTS ===================== */
-
+/* ===================== REPORTS ===================== */
     public static function getRevenueReport(string $type = 'monthly'): array
     {
         $db = self::db();
@@ -838,18 +848,12 @@ class AdminService
 
         $stmt = $db->query("
         SELECT
-            DATE_FORMAT(
-                COALESCE(p.payment_date, r.created_at),
-                '%Y-%m'
-            ) AS month,
-            SUM(r.final_price) AS revenue
+            DATE_FORMAT(p.payment_date, '%Y-%m') AS month,
+            SUM(p.amount) AS revenue
         FROM reservations r
         JOIN payments p ON p.reservation_id = r.reservation_id
         WHERE p.payment_status = 'paid'
-        GROUP BY DATE_FORMAT(
-            COALESCE(p.payment_date, r.created_at),
-            '%Y-%m'
-        )
+        GROUP BY DATE_FORMAT(p.payment_date, '%Y-%m')
         ORDER BY month ASC
     ");
 
@@ -1332,6 +1336,572 @@ class AdminService
             error_log("Complete booking error: " . $e->getMessage());
             return false;
         }
+    }
+
+    /* ===================== ENHANCED REVENUE REPORTS ===================== */
+    public static function getEnhancedRevenueReport(string $period = 'monthly'): array
+    {
+        $db = self::db();
+
+        $format       = '';
+        $groupBy      = '';
+        $selectFormat = '';
+
+        switch ($period) {
+            case 'daily':
+                $format       = '%Y-%m-%d';
+                $selectFormat = 'DATE_FORMAT(p.payment_date, \'%Y-%m-%d\')';
+                $groupBy      = "DATE(p.payment_date)";
+                break;
+            case 'weekly':
+                $format       = '%Y-%U';
+                $selectFormat = 'CONCAT(YEAR(p.payment_date), \'-\', LPAD(WEEK(p.payment_date), 2, \'0\'))';
+                $groupBy      = "YEARWEEK(p.payment_date)";
+                break;
+            case 'monthly':
+                $format       = '%Y-%m';
+                $selectFormat = 'DATE_FORMAT(p.payment_date, \'%Y-%m\')';
+                $groupBy      = "DATE_FORMAT(p.payment_date, '%Y-%m')";
+                break;
+            case 'yearly':
+                $format       = '%Y';
+                $selectFormat = 'YEAR(p.payment_date)';
+                $groupBy      = "YEAR(p.payment_date)";
+                break;
+            default:
+                $format       = '%Y-%m';
+                $selectFormat = 'DATE_FORMAT(p.payment_date, \'%Y-%m\')';
+                $groupBy      = "DATE_FORMAT(p.payment_date, '%Y-%m')";
+        }
+
+        $sql = "
+        SELECT
+            {$selectFormat} as period,
+            {$selectFormat} as label,
+            COALESCE(SUM(p.amount), 0) as revenue,
+            COUNT(DISTINCT p.reservation_id) as bookingCount,
+            COALESCE(AVG(p.amount), 0) as avgBookingValue
+        FROM payments p
+        JOIN reservations r ON p.reservation_id = r.reservation_id
+        WHERE p.payment_status IN ('paid', 'verified')
+        AND p.payment_date IS NOT NULL
+        AND p.amount > 0
+        GROUP BY {$groupBy}
+        ORDER BY period ASC
+    ";
+
+        $stmt = $db->prepare($sql);
+        $stmt->execute();
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+/* ===================== DEBUG & VALIDATION ===================== */
+    public static function validateRevenueData(): array
+    {
+        $db = self::db();
+
+        $results = [];
+
+        // 1. ตรวจสอบ payments ทั้งหมด
+        $paymentsQuery = $db->query("
+        SELECT
+            p.payment_id,
+            p.reservation_id,
+            p.amount,
+            p.payment_status,
+            p.payment_date,
+            r.final_price,
+            r.status as reservation_status,
+            m.brand,
+            m.model
+        FROM payments p
+        LEFT JOIN reservations r ON p.reservation_id = r.reservation_id
+        LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
+        WHERE p.payment_status IN ('paid', 'verified')
+        ORDER BY p.amount DESC
+    ");
+
+        $paymentsData = $paymentsQuery->fetchAll(\PDO::FETCH_ASSOC);
+
+        // 2. ตรวจสอบ reservations ที่มีการชำระเงิน
+        $reservationsQuery = $db->query("
+        SELECT
+            r.reservation_id,
+            r.final_price,
+            r.status,
+            r.created_at,
+            p.payment_status,
+            p.amount as payment_amount,
+            p.payment_date,
+            m.brand,
+            m.model
+        FROM reservations r
+        LEFT JOIN payments p ON r.reservation_id = p.reservation_id
+        LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
+        WHERE r.status IN ('completed', 'confirmed', 'active')
+        AND p.payment_status IN ('paid', 'verified')
+        ORDER BY r.final_price DESC
+    ");
+
+        $reservationsData = $reservationsQuery->fetchAll(\PDO::FETCH_ASSOC);
+
+        // 3. คำนวณยอดรวม
+        $sumPayments     = array_sum(array_column($paymentsData, 'amount'));
+        $sumReservations = array_sum(array_column($reservationsData, 'final_price'));
+
+        // 4. ตรวจสอบรถยอดนิยม
+        $topBikesQuery = $db->query("
+        SELECT
+            m.motorcycle_id,
+            m.brand,
+            m.model,
+            COUNT(r.reservation_id) as booking_count,
+            COALESCE(SUM(p.amount), 0) as total_revenue
+        FROM motorcycles m
+        LEFT JOIN reservations r ON m.motorcycle_id = r.motorcycle_id
+        LEFT JOIN payments p ON r.reservation_id = p.reservation_id AND p.payment_status IN ('paid', 'verified')
+        GROUP BY m.motorcycle_id, m.brand, m.model
+        ORDER BY booking_count DESC
+        LIMIT 10
+    ");
+
+        $topBikes = $topBikesQuery->fetchAll(\PDO::FETCH_ASSOC);
+
+        return [
+            'payments_total'     => $sumPayments,
+            'payments_count'     => count($paymentsData),
+            'payments_data'      => $paymentsData,
+
+            'reservations_total' => $sumReservations,
+            'reservations_count' => count($reservationsData),
+            'reservations_data'  => $reservationsData,
+
+            'top_bikes'          => $topBikes,
+
+            'database_name'      => $db->query("SELECT DATABASE()")->fetchColumn(),
+        ];
+    }
+
+/* ===================== GET REAL-TIME REVENUE ===================== */
+    public static function getRealTimeRevenue(): array
+    {
+        $db = self::db();
+
+        // วิธีที่ปลอดภัยที่สุด: คำนวณจาก payments ที่เชื่อมโยงกับ reservations
+        $query = $db->query("
+        SELECT
+            -- 1. รายได้จาก payments (หลัก)
+            (SELECT COALESCE(SUM(p.amount), 0)
+             FROM payments p
+             WHERE p.payment_status IN ('paid', 'verified')
+             AND p.amount > 0) as revenue_from_payments,
+
+            -- 2. รายได้จาก reservations ที่มีการชำระเงิน (ยืนยัน)
+            (SELECT COALESCE(SUM(r.final_price), 0)
+             FROM reservations r
+             WHERE r.status IN ('completed', 'confirmed', 'active')
+             AND EXISTS (
+                 SELECT 1 FROM payments p
+                 WHERE p.reservation_id = r.reservation_id
+                 AND p.payment_status IN ('paid', 'verified')
+             )) as revenue_from_reservations,
+
+            -- 3. จำนวน payments ที่ชำระแล้ว
+            (SELECT COUNT(*)
+             FROM payments p
+             WHERE p.payment_status IN ('paid', 'verified')) as total_paid_payments,
+
+            -- 4. จำนวน reservations ที่ชำระเงินแล้ว
+            (SELECT COUNT(DISTINCT r.reservation_id)
+             FROM reservations r
+             WHERE EXISTS (
+                 SELECT 1 FROM payments p
+                 WHERE p.reservation_id = r.reservation_id
+                 AND p.payment_status IN ('paid', 'verified')
+             )) as total_paid_reservations
+    ");
+
+        return $query->fetch(\PDO::FETCH_ASSOC);
+    }
+
+    /* ===================== ENHANCED TOP MOTORCYCLES ===================== */
+    public static function getTopMotorcycles(int $limit = 5): array
+    {
+        $db = self::db();
+
+        $stmt = $db->prepare("
+        SELECT
+            m.motorcycle_id AS motorcycleId,
+            m.brand,
+            m.model,
+            m.year,
+            m.license_plate AS licensePlate,
+            m.color,
+            m.engine_cc AS engineCc,
+            m.price_per_day AS pricePerDay,
+            m.image_url AS imageUrl,
+            m.is_available AS isAvailable,
+
+            -- จำนวนการจองที่เสร็จสมบูรณ์
+            COALESCE((
+                SELECT COUNT(*)
+                FROM reservations r
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND r.status IN ('completed', 'confirmed', 'active')
+            ), 0) AS bookingCount,
+
+            -- รายได้จาก payments ที่ชำระเงินแล้ว
+            COALESCE((
+                SELECT SUM(p.amount)
+                FROM payments p
+                JOIN reservations r ON p.reservation_id = r.reservation_id
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND p.payment_status IN ('paid', 'verified')
+                AND p.amount > 0
+            ), 0) AS totalRevenue,
+
+            -- ค่าเฉลี่ยวันเช่า
+            COALESCE((
+                SELECT AVG(r.total_days)
+                FROM reservations r
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND r.status IN ('completed', 'confirmed', 'active')
+            ), 0) AS avgDays
+
+        FROM motorcycles m
+        ORDER BY bookingCount DESC, totalRevenue DESC
+        LIMIT ?
+    ");
+
+        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        $result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        // Debug log
+        foreach ($result as $index => $motorcycle) {
+            error_log("Top Motorcycle #" . ($index + 1) . ": " .
+                $motorcycle['brand'] . " " . $motorcycle['model'] .
+                " - Bookings: " . $motorcycle['bookingCount'] .
+                " - Revenue: " . $motorcycle['totalRevenue']);
+        }
+
+        return $result;
+    }
+
+/* ===================== GET ALL MOTORCYCLES WITH IMAGES ===================== */
+    public static function getAllMotorcyclesWithImages(): array
+    {
+        $db = self::db();
+
+        $stmt = $db->query("
+        SELECT
+            motorcycle_id AS motorcycleId,
+            brand,
+            model,
+            year,
+            license_plate AS licensePlate,
+            color,
+            engine_cc AS engineCc,
+            price_per_day AS pricePerDay,
+            image_url AS imageUrl,
+            is_available AS isAvailable,
+            created_at AS createdAt
+        FROM motorcycles
+        ORDER BY created_at DESC
+    ");
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    // ใน AdminService.php ให้เพิ่ม method นี้:
+    public static function getTopMotorcyclesWithPeriod(int $limit = 5, string $period = 'all_time'): array
+    {
+        $db = self::db();
+
+        // กำหนดช่วงเวลาตาม period สำหรับ payments
+        $dateCondition = '';
+        switch ($period) {
+            case 'daily':
+                $dateCondition = "AND DATE(p.payment_date) = CURDATE()";
+                break;
+            case 'weekly':
+                $dateCondition = "AND YEARWEEK(p.payment_date) = YEARWEEK(CURDATE())";
+                break;
+            case 'monthly':
+                $dateCondition = "AND YEAR(p.payment_date) = YEAR(CURDATE())
+                          AND MONTH(p.payment_date) = MONTH(CURDATE())";
+                break;
+            case 'yearly':
+                $dateCondition = "AND YEAR(p.payment_date) = YEAR(CURDATE())";
+                break;
+            case 'all_time':
+            default:
+                $dateCondition = "";
+                break;
+        }
+
+        $sql = "
+        SELECT
+            m.motorcycle_id AS motorcycleId,
+            m.brand,
+            m.model,
+            m.year,
+            m.license_plate AS licensePlate,
+            m.color,
+            m.engine_cc AS engineCc,
+            m.price_per_day AS pricePerDay,
+            m.image_url AS imageUrl,
+            m.is_available AS isAvailable,
+
+            -- จำนวนการจองที่ชำระเงินแล้วในช่วงเวลาที่เลือก
+            COALESCE((
+                SELECT COUNT(DISTINCT r.reservation_id)
+                FROM reservations r
+                JOIN payments p ON r.reservation_id = p.reservation_id
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND p.payment_status IN ('paid', 'verified')
+                {$dateCondition}
+            ), 0) AS bookingCount,
+
+            -- รายได้จาก payments ที่ชำระเงินแล้วในช่วงเวลาที่เลือก
+            COALESCE((
+                SELECT SUM(p.amount)
+                FROM payments p
+                JOIN reservations r ON p.reservation_id = r.reservation_id
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND p.payment_status IN ('paid', 'verified')
+                AND p.amount > 0
+                {$dateCondition}
+            ), 0) AS totalRevenue,
+
+            -- ค่าเฉลี่ยวันเช่า
+            COALESCE((
+                SELECT AVG(r.total_days)
+                FROM reservations r
+                JOIN payments p ON r.reservation_id = p.reservation_id
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND p.payment_status IN ('paid', 'verified')
+                {$dateCondition}
+            ), 0) AS avgDays
+
+        FROM motorcycles m
+        ORDER BY bookingCount DESC, totalRevenue DESC
+        LIMIT ?
+    ";
+
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public static function getTopMotorcyclesEnhanced(int $limit = 5, string $period = 'all_time'): array
+    {
+        $db = self::db();
+
+        // กำหนดเงื่อนไขวันที่ตาม period
+        $dateCondition = '';
+        switch ($period) {
+            case 'daily':
+                $dateCondition = "AND DATE(p.payment_date) = CURDATE()";
+                break;
+            case 'weekly':
+                $dateCondition = "AND YEARWEEK(p.payment_date) = YEARWEEK(CURDATE())";
+                break;
+            case 'monthly':
+                $dateCondition = "AND YEAR(p.payment_date) = YEAR(CURDATE())
+                      AND MONTH(p.payment_date) = MONTH(CURDATE())";
+                break;
+            case 'yearly':
+                $dateCondition = "AND YEAR(p.payment_date) = YEAR(CURDATE())";
+                break;
+            case 'all_time':
+            default:
+                $dateCondition = "";
+                break;
+        }
+
+        $sql = "
+        SELECT
+            m.motorcycle_id AS motorcycleId,
+            m.brand,
+            m.model,
+            m.year,
+            m.license_plate AS licensePlate,
+            m.color,
+            m.engine_cc AS engineCc,
+            m.price_per_day AS pricePerDay,
+            m.image_url AS imageUrl,
+            m.is_available AS isAvailable,
+
+            -- จำนวนการจองทั้งหมดในช่วงเวลาที่เลือก
+            COALESCE((
+                SELECT COUNT(*)
+                FROM reservations r
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND r.status IN ('completed', 'confirmed', 'active')
+                " . ($dateCondition ? "AND EXISTS (
+                    SELECT 1 FROM payments p
+                    WHERE p.reservation_id = r.reservation_id
+                    AND p.payment_status IN ('paid', 'verified')
+                    {$dateCondition}
+                )" : "") . "
+            ), 0) AS bookingCount,
+
+            -- รายได้จาก reservations (รวมทั้งหมด)
+            COALESCE((
+                SELECT SUM(r.final_price)
+                FROM reservations r
+                WHERE r.motorcycle_id = m.motorcycle_id
+                AND r.status IN ('completed', 'confirmed', 'active')
+                " . ($dateCondition ? "AND EXISTS (
+                    SELECT 1 FROM payments p
+                    WHERE p.reservation_id = r.reservation_id
+                    AND p.payment_status IN ('paid', 'verified')
+                    {$dateCondition}
+                )" : "") . "
+            ), 0) AS totalRevenue
+
+        FROM motorcycles m
+        WHERE m.is_available = 1
+        ORDER BY bookingCount DESC, totalRevenue DESC
+        LIMIT ?
+    ";
+
+        $stmt = $db->prepare($sql);
+        $stmt->bindValue(1, $limit, \PDO::PARAM_INT);
+        $stmt->execute();
+
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public static function debugRevenueData(): array
+    {
+        $db = self::db();
+
+        // 1. ตรวจสอบข้อมูลทั้งหมดใน payments
+        $payments = $db->query("
+        SELECT
+            p.*,
+            r.status as reservation_status,
+            r.final_price,
+            m.brand,
+            m.model
+        FROM payments p
+        LEFT JOIN reservations r ON p.reservation_id = r.reservation_id
+        LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
+        ORDER BY p.amount DESC
+    ")->fetchAll(\PDO::FETCH_ASSOC);
+
+        // 2. ตรวจสอบข้อมูลทั้งหมดใน reservations
+        $reservations = $db->query("
+        SELECT
+            r.*,
+            p.payment_status,
+            p.amount as payment_amount,
+            m.brand,
+            m.model
+        FROM reservations r
+        LEFT JOIN payments p ON r.reservation_id = p.reservation_id
+        LEFT JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
+        WHERE r.status IN ('completed', 'confirmed', 'active')
+        ORDER BY r.final_price DESC
+    ")->fetchAll(\PDO::FETCH_ASSOC);
+
+        // 3. คำนวณยอดรวม
+        $totalPayments     = array_sum(array_column($payments, 'amount'));
+        $totalReservations = array_sum(array_column($reservations, 'final_price'));
+
+        return [
+            'total_payments'     => $totalPayments,
+            'total_reservations' => $totalReservations,
+            'payments_count'     => count($payments),
+            'reservations_count' => count($reservations),
+            'payments_data'      => $payments,
+            'reservations_data'  => $reservations,
+        ];
+    }
+
+    // ใน AdminService class ให้เพิ่ม method นี้ก่อนหน้า getCustomerProfile
+
+    public static function getCustomerReservationStats(string $customerId): array
+    {
+        $db = self::db();
+
+        $stmt = $db->prepare("
+        SELECT
+            COUNT(CASE WHEN r.status IN ('completed', 'confirmed', 'active') THEN 1 END) AS successful_bookings,
+            COUNT(CASE WHEN r.status IN ('cancelled', 'rejected') THEN 1 END) AS failed_bookings,
+            COUNT(CASE WHEN r.status = 'pending' THEN 1 END) AS pending_bookings
+        FROM reservations r
+        WHERE r.customer_id = ?
+    ");
+
+        $stmt->execute([$customerId]);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (! $result) {
+            return [
+                'successful_bookings' => 0,
+                'failed_bookings'     => 0,
+                'pending_bookings'    => 0,
+            ];
+        }
+
+        return $result;
+    }
+
+// แก้ไข method getCustomerProfile ให้รวมข้อมูลเพิ่มเติม
+    public static function getCustomerProfile(string $customerId): array
+    {
+        $db = self::db();
+
+        $stmt = $db->prepare("
+        SELECT
+            c.customer_id   AS customerId,
+            c.first_name    AS firstName,
+            c.last_name     AS lastName,
+            c.email,
+            c.phone,
+            c.line_id       AS lineId,
+            c.is_active     AS isActive,
+            c.created_at    AS createdAt,
+            COUNT(r.reservation_id) AS totalBookings,
+            COALESCE(SUM(r.final_price), 0) AS totalSpent,
+            MAX(r.created_at) AS lastBookingAt
+        FROM customers c
+        LEFT JOIN reservations r ON r.customer_id = c.customer_id
+        WHERE c.customer_id = ?
+        GROUP BY c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.line_id, c.is_active, c.created_at
+        LIMIT 1
+    ");
+
+        $stmt->execute([$customerId]);
+        $result = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        if (! $result) {
+            return [
+                'customerId'    => $customerId,
+                'firstName'     => '',
+                'lastName'      => '',
+                'email'         => '',
+                'phone'         => '',
+                'lineId'        => '',
+                'isActive'      => 1,
+                'createdAt'     => '',
+                'totalBookings' => 0,
+                'totalSpent'    => 0,
+                'lastBookingAt' => null,
+            ];
+        }
+
+        // ดึงสถิติการจองเพิ่มเติม
+        $stats = self::getCustomerReservationStats($customerId);
+
+        return array_merge($result, $stats);
     }
 
 }
