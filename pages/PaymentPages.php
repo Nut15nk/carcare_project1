@@ -343,10 +343,6 @@
                         </li>
                         <li class="flex items-start gap-2">
                             <i data-lucide="check-circle" class="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
-                            <span>เราจะตรวจสอบและติดต่อกลับภายใน 24 ชั่วโมง</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i data-lucide="check-circle" class="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0"></i>
                             <span>สามารถยกเลิกการจองได้ก่อน 24 ชั่วโมง (คืนเงินมัดจำเต็มจำนวน)</span>
                         </li>
                     </ul>

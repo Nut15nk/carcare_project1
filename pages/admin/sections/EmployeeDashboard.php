@@ -1,11 +1,11 @@
 <?php
     if (session_status() === PHP_SESSION_NONE) {
-        session_start();
+    session_start();
     }
 
     if (! isset($_SESSION['user']) || ($_SESSION['user']['role'] ?? '') !== 'owner') {
-        http_response_code(403);
-        exit('Access denied');
+    http_response_code(403);
+    exit('Access denied');
     }
 
     require_once __DIR__ . '/../../../service/Admin/AdminService.php';
@@ -15,49 +15,51 @@
 
     /* ================= POST ================= */
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        try {
-            if ($_POST['action'] === 'add') {
-                AdminService::createUser([
-                    'email'     => $_POST['email'],
-                    'password'  => $_POST['password'],
-                    'firstName' => $_POST['first_name'],
-                    'lastName'  => $_POST['last_name'],
-                    'phone'     => $_POST['phone'],
-                    'position'  => $_POST['position'],
-                ]);
-            }
-
-            if ($_POST['action'] === 'update') {
-                AdminService::updateUser(
-                    $_POST['id'],
-                    $_POST['old_position'], // 👈 เดิม
-                    $_POST['new_position'], // 👈 ใหม่
-                    [
-                        'firstName' => $_POST['first_name'],
-                        'lastName'  => $_POST['last_name'],
-                        'phone'     => $_POST['phone'],
-                        'password'  => $_POST['password'] ?? null,
-                    ]
-                );
-            }
-
-            header('Location: index.php?page=admin&section=employees');
-            exit;
-
-        } catch (Exception $e) {
-            $error = $e->getMessage();
+    try {
+        if ($_POST['action'] === 'add') {
+            AdminService::createUser([
+                'email'            => $_POST['email'],
+                'password'         => $_POST['password'],
+                'confirm_password' => $_POST['confirm_password'],
+                'firstName'        => $_POST['first_name'],
+                'lastName'         => $_POST['last_name'],
+                'phone'            => $_POST['phone'],
+                'position'         => $_POST['position'],
+            ]);
         }
+
+        if ($_POST['action'] === 'update') {
+            AdminService::updateUser(
+                $_POST['id'],
+                $_POST['old_position'],
+                $_POST['new_position'],
+                [
+                    'firstName'        => $_POST['first_name'],
+                    'lastName'         => $_POST['last_name'],
+                    'phone'            => $_POST['phone'],
+                    'password'         => $_POST['password'] ?? null,
+                    'confirm_password' => $_POST['confirm_password'] ?? null,
+                ]
+            );
+        }
+
+        header('Location: index.php?page=admin&section=employees');
+        exit;
+
+    } catch (Exception $e) {
+        $error = $e->getMessage();
+    }
     }
 
     /* ================= DELETE ================= */
     if (isset($_GET['action'], $_GET['id'], $_GET['position']) && $_GET['action'] === 'delete') {
-        try {
-            AdminService::deleteUser($_GET['id'], $_GET['position']);
-            header('Location: index.php?page=admin&section=employees');
-            exit;
-        } catch (Exception $e) {
-            $error = $e->getMessage();
-        }
+    try {
+        AdminService::deleteUser($_GET['id'], $_GET['position']);
+        header('Location: index.php?page=admin&section=employees');
+        exit;
+    } catch (Exception $e) {
+        $error = $e->getMessage();
+    }
     }
 
     $users = AdminService::getAllStaffWithOwners();
@@ -67,25 +69,25 @@
     $edit_user = null;
 
     if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'edit') {
-        foreach ($users as $u) {
-            if ((string) $u['id'] === (string) $_GET['id']) {
-                $edit_user = $u;
-                $edit_mode = true;
-                break;
-            }
+    foreach ($users as $u) {
+        if ((string) $u['id'] === (string) $_GET['id']) {
+            $edit_user = $u;
+            $edit_mode = true;
+            break;
         }
+    }
 
-        if (! $edit_mode) {
-            $error = 'ไม่พบผู้ใช้ที่ต้องการแก้ไข';
-        }
+    if (! $edit_mode) {
+        $error = 'ไม่พบผู้ใช้ที่ต้องการแก้ไข';
+    }
     }
 
     /* ================= HELPER ================= */
     function getPositionBadge(string $position): string
     {
-        return $position === 'owner'
-            ? '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">เจ้าของร้าน</span>'
-            : '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">พนักงาน</span>';
+    return $position === 'owner'
+        ? '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">เจ้าของร้าน</span>'
+        : '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">พนักงาน</span>';
     }
 ?>
 
@@ -113,6 +115,7 @@
                 <input type="hidden" name="old_position" value="<?php echo htmlspecialchars($edit_user['position']); ?>">
             <?php endif; ?>
 
+            <!-- ชื่อ-นามสกุล -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ</label>
@@ -121,7 +124,6 @@
                            required
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg">
                 </div>
-
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">นามสกุล</label>
                     <input type="text" name="last_name"
@@ -131,18 +133,15 @@
                 </div>
             </div>
 
+            <!-- อีเมล + เบอร์โทร -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
-                    <input
-                        type="email"
-                        name="email"
-                        value="<?php echo htmlspecialchars($edit_user['email'] ?? ''); ?>"
-                        <?php if ($edit_mode): ?>readonly<?php endif; ?>
-                        required
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg                                                                                  <?php echo $edit_mode ? 'bg-gray-100 cursor-not-allowed' : ''; ?>">
+                    <input type="email" name="email"
+                           value="<?php echo htmlspecialchars($edit_user['email'] ?? ''); ?>"
+                           <?php echo $edit_mode ? 'readonly' : 'required'; ?>
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg <?php echo $edit_mode ? 'bg-gray-100 cursor-not-allowed' : ''; ?>">
                 </div>
-
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
                     <input type="tel" name="phone"
@@ -152,32 +151,55 @@
                 </div>
             </div>
 
-            <!-- ✅ ตำแหน่ง (เพิ่มเฉพาะตอน edit แต่ UI เดิม) -->
+            <!-- รหัสผ่าน + ยืนยันรหัสผ่าน -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        รหัสผ่าน <?php echo $edit_mode ? '' : '<span class="text-red-500">*</span>'; ?>
+                    </label>
+                    <input type="password"
+                           name="password"
+                           id="password"
+                           placeholder="<?php echo $edit_mode ? 'เว้นว่างไว้หากไม่ต้องการเปลี่ยน' : 'อย่างน้อย 6 ตัวอักษร'; ?>"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                           <?php echo $edit_mode ? '' : 'required'; ?>>
+                    <?php if ($edit_mode): ?>
+                        <p class="text-xs text-gray-500 mt-1">เว้นว่างไว้หากไม่ต้องการเปลี่ยนรหัสผ่าน</p>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        ยืนยันรหัสผ่าน <?php echo $edit_mode ? '' : '<span class="text-red-500">*</span>'; ?>
+                    </label>
+                    <input type="password"
+                           name="confirm_password"
+                           id="confirm_password"
+                           placeholder="ยืนยันรหัสผ่าน"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                           <?php echo $edit_mode ? '' : 'required'; ?>>
+                    <p id="password-error" class="text-xs text-red-500 mt-1 hidden">รหัสผ่านไม่ตรงกัน</p>
+                </div>
+            </div>
+
+            <!-- ตำแหน่ง -->
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">ตำแหน่ง</label>
                 <select name="<?php echo $edit_mode ? 'new_position' : 'position'; ?>"
                         class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                    <option value="staff"                                          <?php echo($edit_user['position'] ?? '') === 'staff' ? 'selected' : ''; ?>>
+                    <option value="staff" <?php echo($edit_user['position'] ?? '') === 'staff' ? 'selected' : ''; ?>>
                         พนักงาน
                     </option>
-                    <option value="owner"                                          <?php echo($edit_user['position'] ?? '') === 'owner' ? 'selected' : ''; ?>>
+                    <option value="owner" <?php echo($edit_user['position'] ?? '') === 'owner' ? 'selected' : ''; ?>>
                         เจ้าของร้าน
                     </option>
                 </select>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน</label>
-                <input type="password" name="password"
-                       placeholder="<?php echo $edit_mode ? '(เว้นว่างถ้าไม่เปลี่ยน)' : 'อย่างน้อย 6 ตัวอักษร'; ?>"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-            </div>
-
+            <!-- ปุ่ม -->
             <div class="flex gap-2">
                 <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">
                     <?php echo $edit_mode ? 'อัปเดตข้อมูล' : 'เพิ่มพนักงาน'; ?>
                 </button>
-
                 <?php if ($edit_mode): ?>
                     <a href="index.php?page=admin&section=employees"
                        class="bg-gray-300 hover:bg-gray-400 px-6 py-2 rounded-lg">
@@ -187,8 +209,39 @@
             </div>
         </form>
     </div>
-</div>
 
+    <script>
+    // ตรวจสอบรหัสผ่านตรงกัน
+    function validatePassword() {
+        const password = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm_password').value;
+        const errorEl = document.getElementById('password-error');
+
+        // กรณีแก้ไขและไม่ได้กรอกรหัสผ่าน
+        if (!password && !confirm) {
+            errorEl.classList.add('hidden');
+            return true;
+        }
+
+        if (password !== confirm) {
+            errorEl.classList.remove('hidden');
+            return false;
+        }
+
+        errorEl.classList.add('hidden');
+        return true;
+    }
+
+    document.getElementById('password')?.addEventListener('input', validatePassword);
+    document.getElementById('confirm_password')?.addEventListener('input', validatePassword);
+
+    document.querySelector('form')?.addEventListener('submit', function(e) {
+        if (!validatePassword()) {
+            e.preventDefault();
+            alert('รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน');
+        }
+    });
+    </script>
 
     <!-- Table -->
     <div class="bg-white rounded-lg shadow overflow-hidden">

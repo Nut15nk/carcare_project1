@@ -365,7 +365,7 @@ class PaymentService
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             //CURLOPT_CAINFO         => 'C:/Program Files/php-8.4.14/extras/ssl/cacert.pem',
-            CURLOPT_CAINFO => 'C:/php/extras/ssl/cacert.pem',
+            CURLOPT_CAINFO         => 'C:/php/extras/ssl/cacert.pem',
         ]);
 
         $response = curl_exec($ch);
@@ -389,6 +389,50 @@ class PaymentService
         }
 
         return $result['data']['url'];
+    }
+    public static function getPaymentsForUser(string $customerId): array
+    {
+        $db = Database::connect();
+
+        try {
+            $stmt = $db->prepare("
+                SELECT
+                    p.payment_id,
+                    p.reservation_id,
+                    p.amount,
+                    p.payment_method,
+                    p.payment_status,
+                    p.payment_date,
+                    p.transaction_id,
+                    p.slip_image_url,
+                    p.notes,
+                    p.created_at,
+                    r.reservation_id,
+                    r.customer_id,
+                    r.total_price,
+                    r.final_price,
+                    r.status as booking_status
+                FROM payments p
+                JOIN reservations r ON p.reservation_id = r.reservation_id
+                WHERE r.customer_id = ?
+                ORDER BY p.created_at DESC
+            ");
+            $stmt->execute([$customerId]);
+
+            $payments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // แปลงเป็น associative array โดยใช้ reservation_id เป็น key
+            $paymentMap = [];
+            foreach ($payments as $payment) {
+                $paymentMap[$payment['reservation_id']] = $payment;
+            }
+
+            return $paymentMap;
+
+        } catch (Exception $e) {
+            error_log("PaymentService::getPaymentsForUser - Error: " . $e->getMessage());
+            return [];
+        }
     }
 
 }

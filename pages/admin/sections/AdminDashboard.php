@@ -15,26 +15,21 @@
 
     // Report Stats
     $allCustomers    = AdminService::getAllCustomers();
-    $allReservations = AdminService::getAllReservationsDetailed(); // เปลี่ยนเป็น detailed version
+    $allReservations = AdminService::getAllReservationsDetailed();
 
-                                                                       // Enhanced Data - แยก period สำหรับแต่ละส่วน
-    $topMotorcyclesPeriod = $_GET['motorcycles_period'] ?? 'all_time'; // เพิ่ม parameter ใหม่
-    $topMotorcycles       = AdminService::getTopMotorcyclesEnhanced(5, $topMotorcyclesPeriod);
-    $allMotorcycles       = AdminService::getAllMotorcyclesWithImages();
+    // ✅ แยก period สำหรับรถยอดนิยม
+    $motorcyclesPeriod = $_GET['motorcycles_period'] ?? 'all_time';
+    $topMotorcycles    = AdminService::getTopMotorcyclesEnhanced(5, $motorcyclesPeriod);
+    $allMotorcycles    = AdminService::getAllMotorcyclesWithImages();
 
-    // Revenue & Activity - แยก period ของแต่ละส่วน
-    $revenuePeriod    = $_GET['revenue_period'] ?? 'monthly';
-    $activitiesPeriod = $_GET['activities_period'] ?? 'monthly';
+    // ✅ แยก period สำหรับรายได้
+    $revenuePeriod = $_GET['revenue_period'] ?? 'monthly';
+    $revenueReport = AdminService::getEnhancedRevenueReport($revenuePeriod);
 
-    // ใช้ getEnhancedRevenueReport() แทน getRevenueReport()
-    $revenueReport    = AdminService::getEnhancedRevenueReport($revenuePeriod);
+    // ✅ กิจกรรมล่าสุด
     $recentActivities = AdminService::getRecentActivities(10);
     $recentBookings   = AdminService::getRecentReservations(5);
-    
-    // Debug data
-    $debugData = AdminService::debugRevenueData();
-    error_log('Debug Revenue Data: ' . json_encode($debugData));
-    
+
     } catch (Throwable $e) {
     error_log('[AdminDashboard] ' . $e->getMessage());
     $statsData        = [];
@@ -50,7 +45,6 @@
     /* ===================== CALCULATIONS ===================== */
     $activeCustomers = count(array_filter($allCustomers, fn($c) => ($c['isActive'] ?? 1) == 1));
 
-    // Prepare stats cards - ปรับให้ตรงกับ data ที่ได้จาก getDashboardStats() ใหม่
     $stats = [
     [
         'label' => 'การจองทั้งหมด',
@@ -133,7 +127,6 @@
         transform: scale(1.05);
     }
 
-    /* Custom scrollbar */
     .revenue-chart-container::-webkit-scrollbar {
         height: 6px;
     }
@@ -154,32 +147,6 @@
 </style>
 
 <div class="space-y-6">
-    <!-- Header with Revenue Period Selector -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">ภาพรวมระบบ</h1>
-            <p class="text-gray-600">สรุปข้อมูลการดำเนินงานและสถิติของร้าน</p>
-        </div>
-
-        <!-- Global Period Selector - สำหรับ Top Motorcycles เท่านั้น -->
-        <div class="flex items-center space-x-2">
-            <span class="text-sm text-gray-600">รถยอดนิยม:</span>
-            <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-                <a href="index.php?page=admin&section=dashboard&motorcycles_period=all_time&revenue_period=<?php echo $revenuePeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                   class="px-3 py-1.5 text-xs font-medium <?php echo($topMotorcyclesPeriod === 'all_time') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
-                    ทั้งหมด
-                </a>
-                <a href="index.php?page=admin&section=dashboard&motorcycles_period=monthly&revenue_period=<?php echo $revenuePeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                   class="px-3 py-1.5 text-xs font-medium <?php echo($topMotorcyclesPeriod === 'monthly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
-                    รายเดือน
-                </a>
-                <a href="index.php?page=admin&section=dashboard&motorcycles_period=yearly&revenue_period=<?php echo $revenuePeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                   class="px-3 py-1.5 text-xs font-medium <?php echo($topMotorcyclesPeriod === 'yearly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> transition-colors">
-                    รายปี
-                </a>
-            </div>
-        </div>
-    </div>
 
     <!-- Stats Grid - 6 Cards -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -201,14 +168,14 @@
     <!-- Top Motorcycles Grid -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div class="px-5 py-4 border-b border-gray-200 bg-gray-50">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h2 class="font-semibold text-lg text-gray-800">รถยอดนิยม</h2>
                     <p class="text-sm text-gray-600 mt-1">
                         <?php
-                            if ($topMotorcyclesPeriod === 'monthly') {
+                            if ($motorcyclesPeriod === 'monthly') {
                                 echo 'รถที่ถูกจองมากที่สุด (เดือนนี้)';
-                            } elseif ($topMotorcyclesPeriod === 'yearly') {
+                            } elseif ($motorcyclesPeriod === 'yearly') {
                                 echo 'รถที่ถูกจองมากที่สุด (ปีนี้)';
                             } else {
                                 echo 'รถที่ถูกจองมากที่สุด (ทั้งหมด)';
@@ -216,21 +183,26 @@
                         ?>
                     </p>
                 </div>
+
                 <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-600">ช่วงเวลา:</span>
+                    <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+                        <a href="index.php?page=admin&section=dashboard&motorcycles_period=all_time"
+                        class="px-3 py-1.5 text-xs font-medium <?php echo($motorcyclesPeriod === 'all_time') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
+                            ทั้งหมด
+                        </a>
+                        <a href="index.php?page=admin&section=dashboard&motorcycles_period=monthly"
+                        class="px-3 py-1.5 text-xs font-medium <?php echo($motorcyclesPeriod === 'monthly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
+                            รายเดือน
+                        </a>
+                        <a href="index.php?page=admin&section=dashboard&motorcycles_period=yearly"
+                        class="px-3 py-1.5 text-xs font-medium <?php echo($motorcyclesPeriod === 'yearly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> transition-colors">
+                            รายปี
+                        </a>
+                    </div>
                     <span class="px-3 py-1 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-xs font-medium rounded-full">
                         <?php echo count($topMotorcycles); ?> รายการ
                     </span>
-                    <div class="text-xs text-gray-500">
-                        <?php
-                            if ($topMotorcyclesPeriod === 'monthly') {
-                                echo date('M Y');
-                            } elseif ($topMotorcyclesPeriod === 'yearly') {
-                                echo date('Y');
-                            } else {
-                                echo 'ทั้งหมด';
-                            }
-                        ?>
-                    </div>
                 </div>
             </div>
         </div>
@@ -240,7 +212,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                     <?php foreach ($topMotorcycles as $index => $motorcycle): ?>
                         <div class="bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
-                            <!-- Badge สำหรับอันดับ -->
+                            <!-- Badge อันดับ -->
                             <div class="absolute top-3 left-3 z-10">
                                 <?php if ($index === 0): ?>
                                     <span class="px-2 py-1 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-xs font-bold rounded-full">
@@ -376,24 +348,20 @@
                 <p class="text-sm text-gray-600 mt-1">สรุปรายได้ตามช่วงเวลา</p>
             </div>
 
-            <!-- Revenue Period Selector - ของรายได้โดยเฉพาะ -->
+            <!-- Revenue Period Selector -->
             <div class="flex items-center space-x-2">
                 <span class="text-sm text-gray-600">ช่วงเวลา:</span>
                 <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden">
-                    <a href="index.php?page=admin&section=dashboard&revenue_period=daily&motorcycles_period=<?php echo $topMotorcyclesPeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                       class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'daily') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
+                    <a href="index.php?page=admin&section=dashboard&revenue_period=daily"
+                    class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'daily') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
                         รายวัน
                     </a>
-                    <a href="index.php?page=admin&section=dashboard&revenue_period=weekly&motorcycles_period=<?php echo $topMotorcyclesPeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                       class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'weekly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
-                        รายสัปดาห์
-                    </a>
-                    <a href="index.php?page=admin&section=dashboard&revenue_period=monthly&motorcycles_period=<?php echo $topMotorcyclesPeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                       class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'monthly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
+                    <a href="index.php?page=admin&section=dashboard&revenue_period=monthly"
+                    class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'monthly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> border-r border-gray-300 transition-colors">
                         รายเดือน
                     </a>
-                    <a href="index.php?page=admin&section=dashboard&revenue_period=yearly&motorcycles_period=<?php echo $topMotorcyclesPeriod; ?>&activities_period=<?php echo $activitiesPeriod; ?>"
-                       class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'yearly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> transition-colors">
+                    <a href="index.php?page=admin&section=dashboard&revenue_period=yearly"
+                    class="px-4 py-2 text-sm font-medium <?php echo($revenuePeriod === 'yearly') ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'; ?> transition-colors">
                         รายปี
                     </a>
                 </div>
@@ -401,41 +369,108 @@
         </div>
 
         <?php if (! empty($revenueReport)): ?>
-            <div class="relative">
-                <canvas id="revenueChart" height="280"></canvas>
-            </div>
+    <div class="relative">
+        <canvas id="revenueChart" height="280"></canvas>
+    </div>
 
-            <!-- Summary -->
-            <div class="mt-8 pt-6 border-t border-gray-200">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-green-600">
-                            ฿<?php echo number_format(array_sum(array_column($revenueReport, 'revenue'))); ?>
-                        </div>
-                        <div class="text-sm text-gray-600">รายได้รวม (<?php echo $revenuePeriod === 'daily' ? 'วัน' : ($revenuePeriod === 'weekly' ? 'สัปดาห์' : ($revenuePeriod === 'yearly' ? 'ปี' : 'เดือน')); ?>)</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-blue-600">
-                            <?php echo array_sum(array_column($revenueReport, 'bookingCount')) ?? 0; ?>
-                        </div>
-                        <div class="text-sm text-gray-600">การจองรวม</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-2xl font-bold text-purple-600">
-                            ฿<?php echo ! empty($revenueReport) ? number_format(end($revenueReport)['revenue']) : '0'; ?>
-                        </div>
-                        <div class="text-sm text-gray-600">รายได้ล่าสุด</div>
+    <div class="mt-8 pt-6 border-t border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+            <!-- รายได้รวม -->
+            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 text-center border border-green-200 shadow-sm">
+                <div class="flex justify-center mb-3">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
                     </div>
                 </div>
+                <div class="text-sm font-medium text-green-700 mb-2">รายได้รวม</div>
+                <div class="text-3xl font-bold text-green-600 mb-1">
+                    ฿<?php
+                           if ($revenuePeriod === 'daily' && count($revenueReport) > 0) {
+                               $today        = date('Y-m-d');
+                               $dailyRevenue = 0;
+                               foreach ($revenueReport as $row) {
+                                   if ($row['label'] === $today) {
+                                       $dailyRevenue = $row['revenue'];
+                                       break;
+                                   }
+                               }
+                               $totalRevenue = $dailyRevenue;
+                           } else if ($revenuePeriod === 'monthly' && count($revenueReport) > 0) {
+                               $currentMonth   = date('Y-m');
+                               $monthlyRevenue = 0;
+                               foreach ($revenueReport as $row) {
+                                   if ($row['label'] === $currentMonth) {
+                                       $monthlyRevenue = $row['revenue'];
+                                       break;
+                                   }
+                               }
+                               $totalRevenue = $monthlyRevenue;
+                           } else {
+                               $totalRevenue = array_sum(array_column($revenueReport, 'revenue'));
+                           }
+                           echo number_format($totalRevenue);
+                       ?>
+                </div>
             </div>
-        <?php else: ?>
-            <div class="h-64 flex flex-col items-center justify-center text-gray-400">
-                <i data-lucide="bar-chart" class="h-16 w-16 mb-4"></i>
-                <p class="text-lg font-medium mb-2">ยังไม่มีข้อมูลรายได้ในช่วงเวลานี้</p>
-                <p class="text-sm">เริ่มรับการจองเพื่อดูสถิติรายได้</p>
+
+            <!-- การจองรวม -->
+            <div class="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 text-center border border-blue-200 shadow-sm">
+                <div class="flex justify-center mb-3">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="text-sm font-medium text-blue-700 mb-2">การจองรวม</div>
+                <div class="text-3xl font-bold text-blue-600 mb-1">
+                    <?php
+                        if ($revenuePeriod === 'daily' && count($revenueReport) > 0) {
+                            $today        = date('Y-m-d');
+                            $bookingCount = 0;
+                            foreach ($revenueReport as $row) {
+                                if ($row['label'] === $today) {
+                                    $bookingCount = $row['bookingCount'] ?? 0;
+                                    break;
+                                }
+                            }
+                        } else if ($revenuePeriod === 'monthly' && count($revenueReport) > 0) {
+                            $currentMonth = date('Y-m');
+                            $bookingCount = 0;
+                            foreach ($revenueReport as $row) {
+                                if ($row['label'] === $currentMonth) {
+                                    $bookingCount = $row['bookingCount'] ?? 0;
+                                    break;
+                                }
+                            }
+                        } else if ($revenuePeriod === 'yearly' && count($revenueReport) > 0) {
+                            $currentYear  = date('Y');
+                            $bookingCount = 0;
+                            foreach ($revenueReport as $row) {
+                                if ($row['label'] == $currentYear) {
+                                    $bookingCount = $row['bookingCount'] ?? 0;
+                                    break;
+                                }
+                            }
+                        } else {
+                            $bookingCount = array_sum(array_column($revenueReport, 'bookingCount')) ?? 0;
+                        }
+                        echo $bookingCount;
+                    ?>
+                </div>
             </div>
-        <?php endif; ?>
+        </div>
     </div>
+<?php else: ?>
+    <div class="h-64 flex flex-col items-center justify-center text-gray-400">
+        <i data-lucide="bar-chart" class="h-16 w-16 mb-4"></i>
+        <p class="text-lg font-medium mb-2">ยังไม่มีข้อมูลรายได้ในช่วงเวลานี้</p>
+        <p class="text-sm">เริ่มรับการจองเพื่อดูสถิติรายได้</p>
+    </div>
+<?php endif; ?>
+    </div>  <!-- ✅ ปิด div ของ Revenue Chart -->
 
     <!-- Recent Activities & Bookings -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -462,10 +497,6 @@
                                     <?php elseif ($a['type'] === 'payment'): ?>
                                         <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                                             <i data-lucide="credit-card" class="h-4 w-4 text-green-600"></i>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                            <i data-lucide="activity" class="h-4 w-4 text-gray-600"></i>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -498,8 +529,7 @@
                         <h2 class="font-semibold text-lg text-gray-800">การจองล่าสุด</h2>
                         <p class="text-sm text-gray-600 mt-1">5 รายการล่าสุด</p>
                     </div>
-                    <a href="index.php?page=admin&section=bookings
-"
+                    <a href="index.php?page=admin&section=bookings"
                        class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                         ดูทั้งหมด →
                     </a>
@@ -580,28 +610,24 @@
 
 </div>
 
-<!-- เพิ่ม Chart.js -->
+<!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // Initialize Lucide icons
     document.addEventListener('DOMContentLoaded', function() {
         if (window.lucide) {
             lucide.createIcons();
         }
-        
+
         <?php if (! empty($revenueReport)): ?>
-            // เตรียมข้อมูลสำหรับกราฟ
             const labels = <?php echo json_encode(array_column($revenueReport, 'label')); ?>;
             const revenues = <?php echo json_encode(array_column($revenueReport, 'revenue')); ?>;
             const bookingCounts = <?php echo json_encode(array_column($revenueReport, 'bookingCount')); ?>;
-            
-            // สีสำหรับกราฟ
+
             const revenueColor = 'rgba(59, 130, 246, 0.8)';
             const bookingColor = 'rgba(16, 185, 129, 0.8)';
-            
-            // สร้างกราฟ
+
             const ctx = document.getElementById('revenueChart').getContext('2d');
-            const revenueChart = new Chart(ctx, {
+            new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -642,18 +668,15 @@
                                     let label = context.dataset.label || '';
                                     if (label.includes('รายได้')) {
                                         return `${label}: ฿${context.parsed.y.toLocaleString()}`;
-                                    } else {
-                                        return `${label}: ${context.parsed.y} ครั้ง`;
                                     }
+                                    return `${label}: ${context.parsed.y} ครั้ง`;
                                 }
                             }
                         }
                     },
                     scales: {
                         x: {
-                            grid: {
-                                display: false
-                            }
+                            grid: { display: false }
                         },
                         y: {
                             type: 'linear',

@@ -144,6 +144,9 @@
                             'type'    => 'success',
                             'message' => $result['message'],
                         ];
+                        // รีเฟรชหน้าเพื่อแสดงข้อมูลล่าสุด
+                        header("Location: " . $_SERVER['REQUEST_URI']);
+                        exit;
                     } else {
                         $error = $result['message'];
                     }
@@ -164,6 +167,9 @@
                         'type'    => 'success',
                         'message' => $result['message'],
                     ];
+                    // รีเฟรชหน้าเพื่อแสดงข้อมูลล่าสุด
+                    header("Location: " . $_SERVER['REQUEST_URI']);
+                    exit;
                 } else {
                     $error = $result['message'];
                 }
@@ -236,6 +242,12 @@
             }
         }
     </script>
+    <style>
+        /* Animation สำหรับ modal */
+        .modal-transition {
+            transition: opacity 0.2s ease-in-out;
+        }
+    </style>
 </head>
 <body class="bg-gray-50">
 <div class="min-h-screen">
@@ -348,13 +360,6 @@
                                         'description' => 'เจ้าหน้าที่ยืนยันการจองแล้ว',
                                         'icon'        => 'check-circle',
                                         'date'        => $booking['status'] === 'confirmed' || in_array($booking['status'], ['in_progress', 'completed']) ? date('d/m/Y H:i', strtotime($booking['updatedAt'] ?? 'now')) : null,
-                                    ],
-                                    [
-                                        'status'      => 'in_progress',
-                                        'label'       => 'เตรียมรถ',
-                                        'description' => 'รถกำลังถูกเตรียมให้คุณ',
-                                        'icon'        => 'package',
-                                        'date'        => $booking['status'] === 'in_progress' || $booking['status'] === 'completed' ? date('d/m/Y H:i', strtotime($booking['updatedAt'] ?? 'now')) : null,
                                     ],
                                     [
                                         'status'      => 'completed',
@@ -594,7 +599,7 @@
                                 <i data-lucide="credit-card" class="h-5 w-5"></i> ชำระมัดจำทันที
                             </a>
                             <p class="text-xs text-gray-500 mt-3">
-                                *ต้องชำระภายใน 24 ชั่วโมง
+                                *ต้องชำระก่อนวันรับรถอย่างน้อย 24 ชั่วโมง
                             </p>
                         </div>
                     <?php else: ?>
@@ -756,124 +761,128 @@
                 <input type="hidden" name="action" value="update_booking">
 
                 <div class="space-y-6">
-    <!-- Pickup Location -->
-    <div>
-        <label class="block text-gray-700 text-sm font-medium mb-2">
-            สถานที่รับรถ <span class="text-danger-600">*</span>
-        </label>
-        <select name="pickup_location"
-                required
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-            <option value="">เลือกสถานที่รับรถ</option>
-            <option value="ร้านเทมป์เทชัน" <?php if ($pickupLocation === 'ร้านเทมป์เทชัน') {
-                                                                               echo 'selected';
-                                                                       }
-                                                                       ?>>
-                ร้านเทมป์เทชัน
-            </option>
-            <option value="สนามบินหาดใหญ่" <?php if ($pickupLocation === 'สนามบินหาดใหญ่') {
-                                                                               echo 'selected';
-                                                                       }
-                                                                       ?>>
-                สนามบินหาดใหญ่
-            </option>
-            <option value="สถานีรถไฟหาดใหญ่" <?php if ($pickupLocation === 'สถานีรถไฟหาดใหญ่') {
-                                                                                     echo 'selected';
-                                                                             }
-                                                                             ?>>
-                สถานีรถไฟหาดใหญ่
-            </option>
-            <option value="สถานีขนส่งหาดใหญ่" <?php if ($pickupLocation === 'สถานีขนส่งหาดใหญ่') {
-                                                                                        echo 'selected';
-                                                                                }
-                                                                                ?>>
-                สถานีขนส่งหาดใหญ่
-            </option>
-            <option value="โรงแรมในเมืองหาดใหญ่" <?php if ($pickupLocation === 'โรงแรมในเมืองหาดใหญ่') {
-                                                                                                 echo 'selected';
-                                                                                         }
-                                                                                         ?>>
-                โรงแรมในเมืองหาดใหญ่
-            </option>
-            <option value="อื่นๆ" <?php if ($pickupLocation === 'อื่นๆ') {
-                                                    echo 'selected';
-                                            }
-                                            ?>>
-                อื่นๆ (ระบุในช่องรายละเอียด)
-            </option>
-        </select>
-    </div>
+                    <!-- Pickup Location -->
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">
+                            สถานที่รับรถ <span class="text-danger-600">*</span>
+                        </label>
+                        <select name="pickup_location" id="pickup_location"
+                                required
+                                onchange="togglePickupDetails()"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <option value="">เลือกสถานที่รับรถ</option>
+                            <option value="ร้านเทมป์เทชัน" <?php if ($pickupLocation === 'ร้านเทมป์เทชัน') {
+                                                                                               echo 'selected';
+                                                                                       }
+                                                                                       ?>>
+                                ร้านเทมป์เทชัน
+                            </option>
+                            <option value="สนามบินหาดใหญ่" <?php if ($pickupLocation === 'สนามบินหาดใหญ่') {
+                                                                                               echo 'selected';
+                                                                                       }
+                                                                                       ?>>
+                                สนามบินหาดใหญ่
+                            </option>
+                            <option value="สถานีรถไฟหาดใหญ่" <?php if ($pickupLocation === 'สถานีรถไฟหาดใหญ่') {
+                                                                                                     echo 'selected';
+                                                                                             }
+                                                                                             ?>>
+                                สถานีรถไฟหาดใหญ่
+                            </option>
+                            <option value="สถานีขนส่งหาดใหญ่" <?php if ($pickupLocation === 'สถานีขนส่งหาดใหญ่') {
+                                                                                                        echo 'selected';
+                                                                                                }
+                                                                                                ?>>
+                                สถานีขนส่งหาดใหญ่
+                            </option>
+                            <option value="โรงแรมในเมืองหาดใหญ่" <?php if ($pickupLocation === 'โรงแรมในเมืองหาดใหญ่') {
+                                                                                                                 echo 'selected';
+                                                                                                         }
+                                                                                                         ?>>
+                                โรงแรมในเมืองหาดใหญ่
+                            </option>
+                            <option value="อื่นๆ" <?php if ($pickupLocation === 'อื่นๆ') {
+                                                                    echo 'selected';
+                                                            }
+                                                            ?>>
+                                อื่นๆ (ระบุในช่องรายละเอียด)
+                            </option>
+                        </select>
+                    </div>
 
-    <!-- Return Location -->
-    <div>
-        <label class="block text-gray-700 text-sm font-medium mb-2">
-            สถานที่คืนรถ <span class="text-danger-600">*</span>
-        </label>
-        <select name="return_location"
-                required
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-            <option value="">เลือกสถานที่คืนรถ</option>
-            <option value="ร้านเทมป์เทชัน" <?php if ($returnLocation === 'ร้านเทมป์เทชัน') {
-                                                                               echo 'selected';
-                                                                       }
-                                                                       ?>>
-                ร้านเทมป์เทชัน
-            </option>
-            <option value="สนามบินหาดใหญ่" <?php if ($returnLocation === 'สนามบินหาดใหญ่') {
-                                                                               echo 'selected';
-                                                                       }
-                                                                       ?>>
-                สนามบินหาดใหญ่
-            </option>
-            <option value="สถานีรถไฟหาดใหญ่" <?php if ($returnLocation === 'สถานีรถไฟหาดใหญ่') {
-                                                                                     echo 'selected';
-                                                                             }
-                                                                             ?>>
-                สถานีรถไฟหาดใหญ่
-            </option>
-            <option value="สถานีขนส่งหาดใหญ่" <?php if ($returnLocation === 'สถานีขนส่งหาดใหญ่') {
-                                                                                        echo 'selected';
-                                                                                }
-                                                                                ?>>
-                สถานีขนส่งหาดใหญ่
-            </option>
-            <option value="โรงแรมในเมืองหาดใหญ่" <?php if ($returnLocation === 'โรงแรมในเมืองหาดใหญ่') {
-                                                                                                 echo 'selected';
-                                                                                         }
-                                                                                         ?>>
-                โรงแรมในเมืองหาดใหญ่
-            </option>
-            <option value="อื่นๆ" <?php if ($returnLocation === 'อื่นๆ') {
-                                                    echo 'selected';
-                                            }
-                                            ?>>
-                อื่นๆ (ระบุในช่องรายละเอียด)
-            </option>
-        </select>
-    </div>
+                    <!-- Pickup Details -->
+                    <div id="pickup_details_container">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">
+                            รายละเอียดเพิ่มเติม (รับรถ)
+                        </label>
+                        <textarea name="pickup_details"
+                                  id="pickup_details"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                  placeholder="เช่น ต้องการติดตั้งกระเป๋า, รถสีขาว, ฯลฯ"><?php echo htmlspecialchars($booking['pickupDetails'] ?? '') ?></textarea>
+                    </div>
 
-    <!-- Pickup Details -->
-    <div>
-        <label class="block text-gray-700 text-sm font-medium mb-2">
-            รายละเอียดเพิ่มเติม (รับรถ)
-        </label>
-        <textarea name="pickup_details"
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="เช่น ต้องการติดตั้งกระเป๋า, รถสีขาว, ฯลฯ"><?php echo htmlspecialchars($booking['pickupDetails'] ?? '') ?></textarea>
-    </div>
+                    <!-- Return Location -->
+                    <div>
+                        <label class="block text-gray-700 text-sm font-medium mb-2">
+                            สถานที่คืนรถ <span class="text-danger-600">*</span>
+                        </label>
+                        <select name="return_location" id="return_location"
+                                required
+                                onchange="toggleReturnDetails()"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                            <option value="">เลือกสถานที่คืนรถ</option>
+                            <option value="ร้านเทมป์เทชัน" <?php if ($returnLocation === 'ร้านเทมป์เทชัน') {
+                                                                                               echo 'selected';
+                                                                                       }
+                                                                                       ?>>
+                                ร้านเทมป์เทชัน
+                            </option>
+                            <option value="สนามบินหาดใหญ่" <?php if ($returnLocation === 'สนามบินหาดใหญ่') {
+                                                                                               echo 'selected';
+                                                                                       }
+                                                                                       ?>>
+                                สนามบินหาดใหญ่
+                            </option>
+                            <option value="สถานีรถไฟหาดใหญ่" <?php if ($returnLocation === 'สถานีรถไฟหาดใหญ่') {
+                                                                                                     echo 'selected';
+                                                                                             }
+                                                                                             ?>>
+                                สถานีรถไฟหาดใหญ่
+                            </option>
+                            <option value="สถานีขนส่งหาดใหญ่" <?php if ($returnLocation === 'สถานีขนส่งหาดใหญ่') {
+                                                                                                        echo 'selected';
+                                                                                                }
+                                                                                                ?>>
+                                สถานีขนส่งหาดใหญ่
+                            </option>
+                            <option value="โรงแรมในเมืองหาดใหญ่" <?php if ($returnLocation === 'โรงแรมในเมืองหาดใหญ่') {
+                                                                                                                 echo 'selected';
+                                                                                                         }
+                                                                                                         ?>>
+                                โรงแรมในเมืองหาดใหญ่
+                            </option>
+                            <option value="อื่นๆ" <?php if ($returnLocation === 'อื่นๆ') {
+                                                                    echo 'selected';
+                                                            }
+                                                            ?>>
+                                อื่นๆ (ระบุในช่องรายละเอียด)
+                            </option>
+                        </select>
+                    </div>
 
-    <!-- Return Details -->
-    <div>
-        <label class="block text-gray-700 text-sm font-medium mb-2">
-            รายละเอียดเพิ่มเติม (คืนรถ)
-        </label>
-        <textarea name="return_details"
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  placeholder="เช่น ต้องการคืนรถที่สนามบิน, จะส่งคีย์ในตู้เซฟ, ฯลฯ"><?php echo htmlspecialchars($booking['returnDetails'] ?? '') ?></textarea>
-    </div>
-</div>
+                    <!-- Return Details -->
+                    <div id="return_details_container">
+                        <label class="block text-gray-700 text-sm font-medium mb-2">
+                            รายละเอียดเพิ่มเติม (คืนรถ)
+                        </label>
+                        <textarea name="return_details"
+                                  id="return_details"
+                                  rows="3"
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                  placeholder="เช่น ต้องการคืนรถที่สนามบิน, จะส่งคีย์ในตู้เซฟ, ฯลฯ"><?php echo htmlspecialchars($booking['returnDetails'] ?? '') ?></textarea>
+                    </div>
+                </div>
 
                 <div class="flex justify-end space-x-3 mt-8">
                     <button type="button" onclick="closeEditModal()"
@@ -897,7 +906,7 @@ document.addEventListener("DOMContentLoaded", function() {
         lucide.createIcons();
     }
 
-    // Handle reason selection
+    // Handle reason selection in cancel modal
     const otherReasonRadio = document.getElementById('other_reason');
     const customReasonTextarea = document.getElementById('custom_reason');
     const reasonRadios = document.querySelectorAll('input[name="cancel_reason"]');
@@ -932,7 +941,41 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
+
+    // ✅ ตรวจสอบสถานะเริ่มต้นของ Pickup Details
+    togglePickupDetails();
+
+    // ✅ ตรวจสอบสถานะเริ่มต้นของ Return Details
+    toggleReturnDetails();
 });
+
+// ✅ ฟังก์ชันซ่อน/แสดง Pickup Details
+function togglePickupDetails() {
+    const pickupLocation = document.getElementById('pickup_location');
+    const pickupDetailsContainer = document.getElementById('pickup_details_container');
+
+    if (pickupLocation && pickupDetailsContainer) {
+        if (pickupLocation.value === 'ร้านเทมป์เทชัน') {
+            pickupDetailsContainer.style.display = 'none';
+        } else {
+            pickupDetailsContainer.style.display = 'block';
+        }
+    }
+}
+
+// ✅ ฟังก์ชันซ่อน/แสดง Return Details
+function toggleReturnDetails() {
+    const returnLocation = document.getElementById('return_location');
+    const returnDetailsContainer = document.getElementById('return_details_container');
+
+    if (returnLocation && returnDetailsContainer) {
+        if (returnLocation.value === 'ร้านเทมป์เทชัน') {
+            returnDetailsContainer.style.display = 'none';
+        } else {
+            returnDetailsContainer.style.display = 'block';
+        }
+    }
+}
 
 function openCancelModal() {
     document.getElementById('cancelModal').classList.remove('hidden');
@@ -947,6 +990,12 @@ function closeCancelModal() {
 function openEditModal() {
     document.getElementById('editModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+
+    // ✅ เรียกใช้ toggle อีกครั้งเมื่อเปิด Modal เพื่อให้สถานะถูกต้อง
+    setTimeout(() => {
+        togglePickupDetails();
+        toggleReturnDetails();
+    }, 50);
 }
 
 function closeEditModal() {

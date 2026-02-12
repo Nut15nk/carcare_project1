@@ -10,7 +10,6 @@ class CustomerService
         $db = Database::connect();
         $id = gen_id('CUST', 10);
 
-
         $stmt = $db->prepare("
             INSERT INTO customers (customer_id, email, password_hash, first_name, last_name, phone, address, date_of_birth, is_verified, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())
@@ -24,7 +23,7 @@ class CustomerService
             $data['lastName'] ?? null,
             $data['phone'] ?? null,
             $data['address'] ?? null,
-            $data['dateOfBirth'] ?? null
+            $data['dateOfBirth'] ?? null,
 
         ]);
         return $ok ? $id : false;
@@ -32,7 +31,7 @@ class CustomerService
 
     public static function findByEmail($email)
     {
-        $db = Database::connect();
+        $db   = Database::connect();
         $stmt = $db->prepare("SELECT * FROM customers WHERE email = ?");
         $stmt->execute([$email]);
         return $stmt->fetch();
@@ -40,7 +39,7 @@ class CustomerService
 
     public static function getById($id)
     {
-        $db = Database::connect();
+        $db   = Database::connect();
         $stmt = $db->prepare("SELECT * FROM customers WHERE customer_id = ?");
         $stmt->execute([$id]);
         return $stmt->fetch();
@@ -49,7 +48,6 @@ class CustomerService
     public static function updateProfile($id, $data)
     {
         $db = Database::connect();
-
 
         $stmt = $db->prepare("
             UPDATE customers SET first_name = ?, last_name = ?, phone = ?, address = ?, updated_at = NOW()
@@ -61,7 +59,35 @@ class CustomerService
             $data['lastName'] ?? null,
             $data['phone'] ?? null,
             $data['address'] ?? null,
-            $id
+            $id,
         ]);
     }
+
+    public static function getCustomerBookings(string $customerId): array
+    {
+        $db = Database::connect();
+
+        try {
+            $stmt = $db->prepare("
+                SELECT
+                    r.*,
+                    m.brand,
+                    m.model,
+                    m.license_plate,
+                    m.image_url
+                FROM reservations r
+                JOIN motorcycles m ON r.motorcycle_id = m.motorcycle_id
+                WHERE r.customer_id = ?
+                ORDER BY r.created_at DESC
+            ");
+            $stmt->execute([$customerId]);
+
+            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        } catch (Exception $e) {
+            error_log("BookingService::getCustomerBookings - Error: " . $e->getMessage());
+            return [];
+        }
+    }
+
 }

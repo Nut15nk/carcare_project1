@@ -124,16 +124,6 @@
                         <?php echo count($bookings); ?> การจอง
                     </p>
                 </div>
-
-                <div class="flex items-center space-x-2">
-                    <!-- Export Button -->
-                    <button class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                        </svg>
-                        ส่งออก
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -639,9 +629,9 @@ function openBookingModal(reservationId) {
                         </div>
                     </div>
 
-                    <!-- ================= PAYMENT SLIP ================= -->
-                     <div class="border border-blue-200 rounded-xl p-6 bg-blue-50 space-y-4 row-span-2 flex flex-col">
 
+                    <!-- ================= PAYMENT SLIP ================= -->
+                    <div class="border border-blue-200 rounded-xl p-6 bg-blue-50 space-y-4 row-span-2 flex flex-col">
                         <h4 class="font-semibold text-lg text-gray-800">
                             หลักฐานการชำระเงิน
                         </h4>
@@ -651,7 +641,7 @@ function openBookingModal(reservationId) {
                                 <div class="bg-gray-100 rounded-lg p-4 flex justify-center">
                                     <img src="${p.slip_image_url}"
                                         alt="สลิปการชำระเงิน"
-                                        class  = "w-full object-contain rounded-lg shadow-sm max-h-[420px]"
+                                        class="w-full object-contain rounded-lg shadow-sm max-h-[420px]"
                                         onerror="this.src='/images/default-slip.png'; this.onerror=null;">
                                 </div>
                             ` : `
@@ -673,19 +663,40 @@ function openBookingModal(reservationId) {
                                         ${p.payment_date ? formatDate(p.payment_date) : '-'}
                                     </div>
                                 </div>
+                                <div>
+                                    <div class="text-gray-600">สถานะ</div>
+                                    <div>
+                                        <span class="px-2 py-1 text-xs rounded-full
+                                            ${p.payment_status === 'verified' ? 'bg-green-100 text-green-800' :
+                                            p.payment_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                            'bg-yellow-100 text-yellow-800'}">
+                                            ${p.payment_status === 'pending' ? 'รอดำเนินการ' :
+                                            p.payment_status === 'verified' ? 'ยืนยันแล้ว' :
+                                            p.payment_status === 'rejected' ? 'ปฏิเสธแล้ว' : p.payment_status}
+                                        </span>
+                                    </div>
+                                </div>
+                                ${p.notes ? `
+                                    <div class="col-span-2">
+                                        <div class="text-gray-600">หมายเหตุ</div>
+                                        <div class="text-sm text-gray-700 bg-white p-2 rounded">${p.notes}</div>
+                                    </div>
+                                ` : ''}
                             </div>
 
-                            <div class="flex gap-3 pt-4 border-t">
-                                <button onclick="verifyPayment('${b.reservationId}')"
-                                        class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg">
-                                    ยืนยันการชำระเงิน
-                                </button>
-
-                                <button onclick="rejectPayment('${b.reservationId}')"
-                                        class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg">
-                                    ปฏิเสธการชำระเงิน
-                                </button>
-                            </div>
+                            <!-- ✅ แสดงปุ่มเฉพาะตอน payment_status = pending -->
+                            ${p.payment_status === 'pending' ? `
+                                <div class="flex gap-3 pt-4 border-t">
+                                    <button onclick="verifyPayment('${b.reservationId}')"
+                                            class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg">
+                                        ยืนยันการชำระเงิน
+                                    </button>
+                                    <button onclick="rejectPayment('${b.reservationId}')"
+                                            class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg">
+                                        ปฏิเสธการชำระเงิน
+                                    </button>
+                                </div>
+                            ` : ''}
                         ` : `
                             <div class="text-center p-8 bg-gray-100 rounded-lg text-gray-500">
                                 ยังไม่มีข้อมูลการชำระเงิน
@@ -694,6 +705,7 @@ function openBookingModal(reservationId) {
                     </div>
 
 
+                    <!-- ================= สถานที่คืนรถ ================= -->
                     <div class="border border-red-200 rounded-xl p-6 bg-red-50">
                         <div class="flex items-center space-x-2 mb-4">
                             <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
@@ -703,37 +715,179 @@ function openBookingModal(reservationId) {
                             </div>
                             <h4 class="font-semibold text-lg text-gray-800">สถานที่คืนรถ</h4>
                         </div>
+
                         <div class="space-y-3">
                             <div>
                                 <div class="text-sm text-gray-600">สถานที่ (บันทึกโดยแอดมิน)</div>
                                 <div class="font-medium">${b.return_location || 'ยังไม่ได้ระบุ'}</div>
                             </div>
-                            <div>
-                                <div class="text-sm text-gray-600">สภาพรถเมื่อคืน</div>
-                                <div class="font-medium">${b.return_details || '-'}</div>
-                            </div>
+
+                            <!-- ✅ แสดงข้อมูลการคืนรถเสมอถ้ามี -->
+                            ${b.return_condition ? `
+                                <div class="mt-3 pt-3 border-t border-red-200">
+                                    <div class="text-sm font-semibold text-gray-700 mb-2">ข้อมูลการคืนรถ:</div>
+                                    <div class="bg-white p-3 rounded-lg">
+                                        <!-- ในส่วนแสดงข้อมูลการคืนรถ -->
+                                <div class="flex items-center mb-2">
+                                    <span class="px-2 py-1 text-xs rounded-full
+                                        ${b.return_motorcycle_status === 'READY' ? 'bg-green-100 text-green-800' :
+                                        b.return_motorcycle_status === 'MAINTENANCE' ? 'bg-yellow-100 text-yellow-800' :
+                                        b.return_motorcycle_status === 'CLEANING' ? 'bg-blue-100 text-blue-800' :
+                                        b.return_motorcycle_status === 'DAMAGED' ? 'bg-red-100 text-red-800' :
+                                        b.return_motorcycle_status === 'LOST' ? 'bg-gray-900 text-white' :
+                                        b.return_motorcycle_status === 'UNAVAILABLE' ? 'bg-gray-100 text-gray-800' :
+                                        'bg-gray-100 text-gray-800'}">
+                                        ${b.return_motorcycle_status === 'READY' ? 'สภาพปกติ' :
+                                        b.return_motorcycle_status === 'MAINTENANCE' ? 'มีรอย/เสียหายเล็กน้อย' :
+                                        b.return_motorcycle_status === 'CLEANING' ? 'กำลังทำความสะอาด' :
+                                        b.return_motorcycle_status === 'DAMAGED' ? 'เสียหายรุนแรง' :
+                                        b.return_motorcycle_status === 'LOST' ? 'สูญหาย' :
+                                        b.return_motorcycle_status === 'UNAVAILABLE' ? 'ไม่พร้อมใช้งาน' :
+                                        b.return_motorcycle_status}
+                                    </span>
+                                </div>
+                                        <div class="text-sm text-gray-700 whitespace-pre-wrap">
+                                            ${b.return_condition}
+                                        </div>
+                                        ${b.return_checked_by ? `
+                                            <div class="text-xs text-gray-500 mt-2">
+                                                ผู้ตรวจรับ: ${b.return_checked_by}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            ` : `
+                                <div>
+                                    <div class="text-sm text-gray-600">สภาพรถเมื่อคืน</div>
+                                    <div class="font-medium">${b.return_details || '-'}</div>
+                                </div>
+                            `}
                         </div>
                     </div>
+
+                        ${b.status === 'completed' ? `
+                        <!-- ✅ เสร็จสิ้น - แสดงสรุปการคืนรถ -->
+                        <div class="border border-green-200 rounded-xl p-6 bg-green-50">
+                            <div class="flex items-start space-x-3">
+                                <div class="w-10 h-10 bg-green-100 rounded-lg flex-shrink-0 flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-lg text-gray-800">การเช่าเสร็จสิ้นแล้ว</h4>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    ยกเลิกเมื่อ ${b.updatedAt ? formatDateTime(b.updatedAt) : '-'}
+                                </p>
+                                </div>
+                            </div>
+                        </div>
+                    ` : b.status === 'cancelled' ? `
+                        <!-- ❌ ยกเลิก - แสดงข้อมูลการยกเลิก -->
+                        <div class="border border-red-200 rounded-xl p-6 bg-red-50">
+                            <div class="flex items-start space-x-3">
+                                <div class="w-10 h-10 bg-red-100 rounded-lg flex-shrink-0 flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-semibold text-lg text-gray-800">การจองถูกยกเลิก</h4>
+                                    <p class="text-sm text-gray-600 mt-1">
+                                        ยกเลิกเมื่อ ${b.updatedAt ? formatDateTime(b.updatedAt) : '-'}
+                                    </p>
+                                    ${p?.notes ? `
+                                        <div class="mt-3 p-3 bg-white rounded-lg border border-red-100">
+                                            <div class="text-xs font-semibold text-red-800 mb-1">เหตุผลที่ปฏิเสธ:</div>
+                                            <div class="text-sm text-gray-700">${p.notes}</div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    ` : b.status === 'confirmed' || b.status === 'pending' ? `
+                        <!-- ⏳ รอดำเนินการ/ยืนยันแล้ว - แสดงฟอร์มคืนรถ -->
+                        <div class="border border-purple-200 rounded-xl p-6 bg-purple-50">
+                            <h4 class="font-semibold text-lg text-gray-800 mb-4">
+                                ปิดงาน / คืนรถ
+                            </h4>
+
+                            <!-- Checkbox สภาพรถ (Radio Buttons) -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    สภาพรถหลังคืน <span class="text-red-500">*</span>
+                                </label>
+                                <div class="space-y-3 bg-white p-4 rounded-lg border border-purple-100">
+                                    <div class="flex items-center">
+                                        <input type="radio"
+                                            name="motorcycle_status"
+                                            id="status_ready"
+                                            value="READY"
+                                            checked
+                                            class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                        <label for="status_ready" class="ml-3 block text-sm font-medium text-gray-700">
+                                            <span class="text-green-600 font-semibold">✓ สภาพปกติ</span>
+                                            <span class="text-gray-500">- ไม่มีรอยขีดข่วน, เครื่องยนต์ปกติ</span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="radio"
+                                            name="motorcycle_status"
+                                            id="status_maintenance"
+                                            value="MAINTENANCE"
+                                            class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                        <label for="status_maintenance" class="ml-3 block text-sm font-medium text-gray-700">
+                                            <span class="text-yellow-600 font-semibold">⚠ มีรอย/เสียหายเล็กน้อย</span>
+                                            <span class="text-gray-500">- มีรอยขีดข่วน, เซาะร่อง, ถลอก</span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="radio"
+                                            name="motorcycle_status"
+                                            id="status_damaged"
+                                            value="DAMAGED"
+                                            class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                        <label for="status_damaged" class="ml-3 block text-sm font-medium text-gray-700">
+                                            <span class="text-red-600 font-semibold">✗ เสียหายรุนแรง</span>
+                                            <span class="text-gray-500">- ชิ้นส่วนแตกหัก, เครื่องยนต์มีปัญหา</span>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <input type="radio"
+                                            name="motorcycle_status"
+                                            id="status_lost"
+                                            value="LOST"
+                                            class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                        <label for="status_lost" class="ml-3 block text-sm font-medium text-gray-700">
+                                            <span class="text-gray-900 font-semibold">🔴 สูญหาย/ไม่คืนรถ</span>
+                                            <span class="text-gray-500">- ลูกค้าไม่นำรถมาคืน</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- รายละเอียดเพิ่มเติม (Textarea) -->
+                            <div class="mb-4">
+                                <label for="return-condition" class="block text-sm font-medium text-gray-700 mb-2">
+                                    รายละเอียดเพิ่มเติม / หมายเหตุ
+                                </label>
+                                <textarea id="return-condition"
+                                        class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                        rows="4"
+                                        placeholder="ระบุรายละเอียดเพิ่มเติม เช่น จุดที่มีรอย, อะไหล่ที่เสียหาย, ค่าเสียหาย ฯลฯ"></textarea>
+                            </div>
+
+                            <!-- ปุ่มยืนยัน -->
+                            <button onclick="completeBookingWithCondition('${b.reservationId}')"
+                                    class="w-full px-4 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-lg font-medium shadow-sm hover:shadow transition-all">
+                                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                ยืนยันการคืนรถ
+                            </button>
+                        </div>
+                    ` : ''}
                 </div>
-
-
-                <!-- ================= COMPLETE BOOKING ================= -->
-                <div class="border border-purple-200 rounded-xl p-6 bg-purple-50">
-                    <h4 class="font-semibold text-lg text-gray-800 mb-4">
-                        ปิดงาน / คืนรถ
-                    </h4>
-
-                    <textarea id="return-condition"
-                              class="w-full border border-gray-300 rounded-lg p-3 mb-4"
-                              rows="4"
-                              placeholder="บันทึกสภาพรถหลังคืน เช่น มีรอย / สภาพสมบูรณ์"></textarea>
-
-                    <button onclick="completeBooking('${b.reservationId}')"
-                            class="w-full px-4 py-3 bg-purple-600 text-white rounded-lg">
-                        เสร็จสิ้นการเช่า
-                    </button>
-                </div>
-
             `;
 
             // Show modal
@@ -846,6 +1000,72 @@ function completeBooking(reservationId) {
         alert('เกิดข้อผิดพลาดในการอัปเดต');
     });
 }
+
+// ==================== ฟังก์ชันจัดการคืนรถ (แบบมี Checkbox) ====================
+function completeBookingWithCondition(reservationId)
+{
+    // รับค่าสภาพรถจาก Radio
+    const motorcycleStatus = document.querySelector('input[name="motorcycle_status"]:checked');
+    if (! motorcycleStatus) {
+        alert('กรุณาเลือกสภาพรถหลังคืน');
+        return;
+    }
+
+    const returnCondition = document.getElementById('return-condition').value.trim();
+
+    // ✅ ถ้าเลือกสภาพเสียหาย ให้แน่ใจว่ากรอกรายละเอียดด้วย
+    if (motorcycleStatus.value !== 'READY' && returnCondition === '') {
+        alert('กรุณาระบุรายละเอียดเพิ่มเติมเกี่ยวกับสภาพรถ');
+        return;
+    }
+
+    // ✅ ถ้าเลือกสภาพเสียหายรุนแรง หรือ สูญหาย ให้เตือนอีกครั้ง
+    if (motorcycleStatus.value === 'DAMAGED' || motorcycleStatus.value === 'LOST') {
+        if (! confirm('⚠ คำเตือน: คุณกำลังบันทึกว่ารถเสียหายรุนแรงหรือสูญหาย\n\nกรุณาตรวจสอบข้อมูลให้ถูกต้องก่อนดำเนินการ')) {
+            return;
+        }
+    }
+
+    if (! confirm('ยืนยันว่าการเช่าเสร็จสิ้นและบันทึกสภาพรถเรียบร้อย?')) {
+        return;
+    }
+
+    // ✅ แสดง Loading
+    const btn          = event.currentTarget;
+    const originalText = btn.innerHTML;
+    btn.innerHTML      = '<svg class="animate-spin w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> กำลังบันทึก...';
+    btn.disabled       = true;
+
+    // ✅ ส่งข้อมูลไป API
+    fetch('/pages/api/admin/payment.php', {
+        method: 'POST',
+        headers: {'Content-Type':'application/x-www-form-urlencoded'},
+        body: `action=complete&reservation_id=${encodeURIComponent(reservationId)}&return_condition=${encodeURIComponent(returnCondition)}&motorcycle_status=${encodeURIComponent(motorcycleStatus.value)}`
+    })
+    . then(response => {
+        if (! response.ok) {
+            return response.json().then(err => {throw new Error(err.error || 'เกิดข้อผิดพลาด');});
+        }
+        return response.json();
+    })
+    . then(data => {
+        if (data.success) {
+            alert('✅ '+data.message);
+            location.reload();
+        } else {
+            alert('❌ '+(data.error || 'เกิดข้อผิดพลาด'));
+            btn.innerHTML = originalText;
+            btn.disabled  = false;
+        }
+    })
+    . catch (error => {
+        console.error('Error:', error);
+        alert('❌ ไม่สามารถบันทึกข้อมูลได้: '+error.message);
+        btn.innerHTML = originalText;
+        btn.disabled  = false;
+    });
+}
+
 
 // แสดง Modal สำหรับสลิป
 function showSlipModal(payment) {

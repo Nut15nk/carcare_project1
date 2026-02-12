@@ -50,12 +50,17 @@ try {
             break;
 
         case 'complete':
-            if (! AdminService::completeBooking($reservationId)) {
+            // ✅ FIX: รับค่าเพิ่มเติม
+            $returnCondition  = $_POST['return_condition'] ?? '';
+            $motorcycleStatus = $_POST['motorcycle_status'] ?? 'READY';
+
+            // ✅ FIX: ส่งค่าไปยัง Service
+            if (! AdminService::completeBooking($reservationId, $returnCondition, $motorcycleStatus)) {
                 throw new Exception('ไม่สามารถอัปเดตสถานะได้');
             }
             echo json_encode([
                 'success' => true,
-                'message' => 'อัปเดตสถานะเสร็จสิ้นสำเร็จ',
+                'message' => 'บันทึกการคืนรถสำเร็จ',
             ]);
             break;
 

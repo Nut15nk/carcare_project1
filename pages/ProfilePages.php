@@ -1,162 +1,602 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
+    // pages/ProfilePages.php
+
+    if (session_status() === PHP_SESSION_NONE) {
     session_start();
-}
-
-if (! isset($_SESSION['user'])) {
-    header("Location: index.php?page=login");
-    exit;
-}
-
-require_once __DIR__ . '/../config/config.php';
-require_once __DIR__ . '/../service/BookingService.php';
-require_once __DIR__ . '/../service/PaymentService.php';
-
-// ======================
-// USER INFO
-// ======================
-$user = $_SESSION['user'];
-
-$userId    = $user['userId'] ?? '';
-$firstName = $user['firstName'] ?? '';
-$lastName  = $user['lastName'] ?? '';
-$email     = $user['email'] ?? '';
-$phone     = $user['phone'] ?? '';
-$role      = $user['role'] ?? 'CUSTOMER';
-
-$fullName = trim($firstName . ' ' . $lastName);
-if ($fullName === '') {
-    $fullName = $email;
-}
-
-// ======================
-// BOOKINGS + PAYMENTS
-// ======================
-$bookings    = [];
-$paymentMap  = [];
-$paidCount   = 0;
-$unpaidCount = 0;
-
-if ($userId) {
-    // ดึงการจองของผู้ใช้
-    $bookings = BookingService::getCustomerBookings($userId);
-
-    // map reservation_id เป็น reservationId เพื่อให้ตรงกับ key
-    foreach ($bookings as &$b) {
-        $b['reservationId'] = $b['reservation_id'];
     }
-    unset($b);
 
-    // ดึง payment ของผู้ใช้
-    $paymentMap = PaymentService::getPaymentsForUser($userId);
+    if (! isset($_SESSION['user'])) {
+    $_SESSION['redirect_url']  = $_SERVER['REQUEST_URI'];
+    $_SESSION['flash_message'] = [
+        'type'    => 'error',
+        'message' => 'กรุณาเข้าสู่ระบบเพื่อดูโปรไฟล์',
+    ];
+    header("Location: login.php");
+    exit;
+    }
 
-    // คำนวณ paid/unpaid
-    foreach ($bookings as $booking) {
-        $rid = $booking['reservationId'] ?? null;
-        if ($rid && isset($paymentMap[$rid]) && strtoupper($paymentMap[$rid]['payment_status']) === 'PAID') {
-            $paidCount++;
+    require_once __DIR__ . '/../config/config.php';
+    require_once __DIR__ . '/../service/UserService.php';
+
+    // ======================
+    // USER INFO
+    // ======================
+    $user   = $_SESSION['user'];
+    $userId = $user['userId'] ?? '';
+    $role   = $user['role'] ?? 'CUSTOMER';
+
+    // ======================
+    // HANDLE FORM SUBMISSION
+    // ======================
+    $success = '';
+    $error   = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['action'])) {
+        switch ($_POST['action']) {
+            case 'update_profile':
+                // รับข้อมูลจากฟอร์ม
+                $updateData = [
+                    'first_name' => $_POST['first_name'] ?? '',
+                    'last_name'  => $_POST['last_name'] ?? '',
+                    'phone'      => $_POST['phone'] ?? '',
+                ];
+
+                // เพิ่มฟิลด์เฉพาะตาม role
+                if ($role === 'CUSTOMER') {
+                    $updateData['line_id'] = $_POST['line_id'] ?? '';
+                } elseif ($role === 'EMPLOYEE' || $role === 'ADMIN') {
+                    $updateData['position'] = $_POST['position'] ?? 'staff';
+                }
+                // OWNER ไม่มีฟิลด์พิเศษ
+
+                // ตรวจสอบข้อมูลเบื้องต้น
+                if (empty($updateData['first_name']) || empty($updateData['last_name']) || empty($updateData['phone'])) {
+                    $error = 'กรุณากรอกข้อมูลให้ครบถ้วน';
+                } else {
+                    // อัปเดตข้อมูล
+                    $result = UserService::updateUserProfile($userId, $role, $updateData);
+
+                    if ($result['success']) {
+                        // ดึงข้อมูลล่าสุดจาก DB มาเก็บใน session
+                        $latestData = UserService::getUserProfile($userId, $role);
+
+                        if ($latestData) {
+                            $_SESSION['user']['firstName'] = $latestData['first_name'] ?? $updateData['first_name'];
+                            $_SESSION['user']['lastName']  = $latestData['last_name'] ?? $updateData['last_name'];
+                            $_SESSION['user']['phone']     = $latestData['phone'] ?? $updateData['phone'];
+
+                            if ($role === 'CUSTOMER') {
+                                $_SESSION['user']['lineId'] = $latestData['line_id'] ?? $updateData['line_id'];
+                            } elseif ($role === 'EMPLOYEE' || $role === 'ADMIN') {
+                                $_SESSION['user']['position'] = $latestData['position'] ?? $updateData['position'];
+                            }
+                            // OWNER ไม่มีฟิลด์พิเศษ
+                        }
+
+                        $success = $result['message'];
+
+                        // รีเฟรชหน้าเพื่อแสดงข้อมูลล่าสุด
+                        header("Location: " . $_SERVER['REQUEST_URI']);
+                        exit;
+                    } else {
+                        $error = $result['message'];
+                    }
+                }
+                break;
+
+            case 'change_password':
+                $currentPassword = $_POST['current_password'] ?? '';
+                $newPassword     = $_POST['new_password'] ?? '';
+                $confirmPassword = $_POST['confirm_password'] ?? '';
+
+                if (empty($currentPassword) || empty($newPassword) || empty($confirmPassword)) {
+                    $error = 'กรุณากรอกรหัสผ่านให้ครบถ้วน';
+                } elseif ($newPassword !== $confirmPassword) {
+                    $error = 'รหัสผ่านใหม่ไม่ตรงกัน';
+                } elseif (strlen($newPassword) < 6) {
+                    $error = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+                } else {
+                    $result = UserService::changePassword($userId, $role, $currentPassword, $newPassword);
+
+                    if ($result['success']) {
+                        $success = $result['message'];
+
+                        // รีเฟรชหน้า
+                        header("Location: " . $_SERVER['REQUEST_URI']);
+                        exit;
+                    } else {
+                        $error = $result['message'];
+                    }
+                }
+                break;
         }
     }
+    }
 
-    $totalBookings = count($bookings);
-    $unpaidCount = $totalBookings - $paidCount;
+    // ======================
+    // GET LATEST USER DATA
+    // ======================
+    $userData = UserService::getUserProfile($userId, $role);
 
-    // sort ใหม่ล่าสุดก่อน
-    usort($bookings, function ($a, $b) {
-        return strtotime($b['created_at'] ?? '') - strtotime($a['created_at'] ?? '');
-    });
-} else {
-    $totalBookings = 0;
-}
+    if ($userData) {
+    // ใช้ค่าจาก DB ก่อน ถ้าไม่มีค่อยใช้ session
+    $firstName = $userData['first_name'] ?? $user['firstName'] ?? '';
+    $lastName  = $userData['last_name'] ?? $user['lastName'] ?? '';
+    $email     = $userData['email'] ?? $user['email'] ?? '';
+    $phone     = $userData['phone'] ?? $user['phone'] ?? '';
+    $lineId    = $userData['line_id'] ?? $user['lineId'] ?? '';
+    $position  = $userData['position'] ?? $user['position'] ?? 'staff';
+    $isActive  = $userData['is_active'] ?? 1;
+    $createdAt = $userData['created_at'] ?? '';
+    $updatedAt = $userData['updated_at'] ?? '';
+
+    // อัปเดต session ให้ตรงกับ DB
+    $_SESSION['user']['firstName'] = $firstName;
+    $_SESSION['user']['lastName']  = $lastName;
+    $_SESSION['user']['phone']     = $phone;
+
+    if ($role === 'CUSTOMER') {
+        $_SESSION['user']['lineId'] = $lineId;
+    } elseif ($role === 'EMPLOYEE' || $role === 'ADMIN') {
+        $_SESSION['user']['position'] = $position;
+    }
+    // OWNER ไม่มีฟิลด์พิเศษ
+    } else {
+    // Fallback to session data
+    $firstName = $user['firstName'] ?? '';
+    $lastName  = $user['lastName'] ?? '';
+    $email     = $user['email'] ?? '';
+    $phone     = $user['phone'] ?? '';
+    $lineId    = $user['lineId'] ?? '';
+    $position  = $user['position'] ?? 'staff';
+    $isActive  = 1;
+    $createdAt = '';
+    $updatedAt = '';
+    }
+
+    $fullName = trim($firstName . ' ' . $lastName);
+    if ($fullName === '') {
+    $fullName = $email;
+    }
+
+    // รูปแบบวันที่
+    $memberSince = ! empty($createdAt) ? date('d M Y', strtotime($createdAt)) : 'ไม่ระบุ';
+    $lastUpdated = ! empty($updatedAt) ? date('d M Y H:i', strtotime($updatedAt)) : 'ไม่ระบุ';
+
+    // ตัวเลือกตำแหน่งสำหรับพนักงาน
+    $positions = [
+    'staff'   => 'พนักงานทั่วไป',
+    'manager' => 'ผู้จัดการ',
+    'admin'   => 'ผู้ดูแลระบบ',
+    ];
 ?>
 
-<div class="min-h-screen bg-gray-50 py-10">
-    <div class="max-w-4xl mx-auto px-4">
-        <div class="bg-white rounded-xl shadow overflow-hidden">
-            <div class="p-6">
-                <div class="flex items-center gap-4">
-                    <div class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                        <i data-lucide="user" class="w-8 h-8 text-blue-600"></i>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โปรไฟล์ของฉัน - เทมป์เทชัน</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-active {
+            border-bottom: 3px solid #3b82f6;
+            color: #1e40af;
+            font-weight: 600;
+        }
+        .transition-all {
+            transition: all 0.2s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen py-10">
+        <div class="max-w-4xl mx-auto px-4">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">โปรไฟล์ของฉัน</h1>
+                <p class="text-gray-600 mt-2">จัดการข้อมูลส่วนตัวและความปลอดภัยของบัญชี</p>
+            </div>
+
+            <!-- Flash Messages -->
+            <?php if (! empty($success)): ?>
+                <div class="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center">
+                    <i data-lucide="check-circle" class="h-5 w-5 mr-2"></i>
+                    <span><?php echo htmlspecialchars($success); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <?php if (! empty($error)): ?>
+                <div class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center">
+                    <i data-lucide="alert-circle" class="h-5 w-5 mr-2"></i>
+                    <span><?php echo htmlspecialchars($error); ?></span>
+                </div>
+            <?php endif; ?>
+
+            <!-- Main Content -->
+            <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                <!-- Profile Header -->
+                <div class="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-8 text-white">
+                    <div class="flex items-center gap-6">
+                        <div class="w-20 h-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                            <i data-lucide="user" class="w-10 h-10 text-white"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-2xl font-bold"><?php echo htmlspecialchars($fullName); ?></h2>
+                            <p class="text-blue-100 flex items-center gap-2 mt-1">
+                                <i data-lucide="mail" class="w-4 h-4"></i>
+                                <?php echo htmlspecialchars($email); ?>
+                            </p>
+                            <div class="flex items-center gap-3 mt-2">
+                                <span class="px-3 py-1 bg-white/20 rounded-full text-sm backdrop-blur">
+                                    <?php
+                                        echo match ($role) {
+                                            'ADMIN'    => 'ผู้ดูแลระบบ',
+                                            'EMPLOYEE' => 'พนักงาน',
+                                            'OWNER'    => 'เจ้าของร้าน',
+                                            default    => 'ลูกค้า',
+                                        };
+                                    ?>
+                                </span>
+                                <?php if ($isActive == 1): ?>
+                                    <span class="px-3 py-1 bg-green-500/20 rounded-full text-sm backdrop-blur flex items-center gap-1">
+                                        <span class="w-2 h-2 bg-green-400 rounded-full"></span>
+                                        บัญชีปกติ
+                                    </span>
+                                <?php else: ?>
+                                    <span class="px-3 py-1 bg-red-500/20 rounded-full text-sm backdrop-blur">
+                                        ระงับการใช้งาน
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900"><?php echo htmlspecialchars($fullName); ?></h1>
-                        <p class="text-sm text-gray-500"><?php echo htmlspecialchars($email); ?></p>
-                        <span class="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-md border border-gray-200">
-                             <?php
-                                 echo match ($role) {
-                                     'ADMIN'    => 'ผู้ดูแลระบบ',
-                                     'EMPLOYEE' => 'พนักงาน',
-                                     default    => 'ลูกค้า',
-                                 };
-                             ?>
-                        </span>
+                </div>
+
+                <!-- Tabs -->
+                <div class="border-b border-gray-200 px-6">
+                    <div class="flex space-x-8">
+                        <button onclick="switchTab('profile')" id="tab-profile-btn" class="tab-active py-4 px-1 text-sm font-medium transition-all">
+                            <i data-lucide="user" class="w-4 h-4 inline mr-2"></i>
+                            ข้อมูลส่วนตัว
+                        </button>
+                        <button onclick="switchTab('security')" id="tab-security-btn" class="py-4 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 transition-all">
+                            <i data-lucide="shield" class="w-4 h-4 inline mr-2"></i>
+                            ความปลอดภัย
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab: Profile Information -->
+                <div id="tab-profile" class="p-6">
+                    <form method="POST" action="" class="space-y-6">
+                        <input type="hidden" name="action" value="update_profile">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- อีเมล (ไม่สามารถแก้ไขได้) -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="mail" class="w-4 h-4 inline mr-1"></i>
+                                    อีเมล
+                                </label>
+                                <input type="email"
+                                       value="<?php echo htmlspecialchars($email); ?>"
+                                       disabled
+                                       class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed">
+                                <p class="text-xs text-gray-500 mt-1">ไม่สามารถเปลี่ยนอีเมลได้</p>
+                            </div>
+
+                            <!-- ชื่อ -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>
+                                    ชื่อ <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       name="first_name"
+                                       value="<?php echo htmlspecialchars($firstName); ?>"
+                                       required
+                                       class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                            </div>
+
+                            <!-- นามสกุล -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>
+                                    นามสกุล <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text"
+                                       name="last_name"
+                                       value="<?php echo htmlspecialchars($lastName); ?>"
+                                       required
+                                       class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                            </div>
+
+                            <!-- เบอร์โทรศัพท์ -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="phone" class="w-4 h-4 inline mr-1"></i>
+                                    เบอร์โทรศัพท์ <span class="text-red-500">*</span>
+                                </label>
+                                <input type="tel"
+                                       name="phone"
+                                       value="<?php echo htmlspecialchars($phone); ?>"
+                                       required
+                                       placeholder="081-234-5678"
+                                       class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                            </div>
+
+                            <!-- ฟิลด์เฉพาะตาม Role -->
+                            <?php if ($role === 'CUSTOMER'): ?>
+                                <!-- LINE ID (เฉพาะลูกค้า) -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i data-lucide="message-circle" class="w-4 h-4 inline mr-1"></i>
+                                        LINE ID
+                                    </label>
+                                    <input type="text"
+                                           name="line_id"
+                                           value="<?php echo htmlspecialchars($lineId); ?>"
+                                           placeholder="เช่น temptation.bike"
+                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                                    <p class="text-xs text-gray-500 mt-1">กรุณากรอก LINE ID เพื่อรับข้อมูลข่าวสาร</p>
+                                </div>
+                            <?php elseif ($role === 'EMPLOYEE' || $role === 'ADMIN'): ?>
+                                <!-- ตำแหน่ง (เฉพาะพนักงาน/ผู้ดูแล) -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        <i data-lucide="briefcase" class="w-4 h-4 inline mr-1"></i>
+                                        ตำแหน่ง
+                                    </label>
+                                    <?php if ($role === 'ADMIN'): ?>
+                                        <input type="text"
+                                               value="<?php echo htmlspecialchars($positions[$position] ?? $position); ?>"
+                                               disabled
+                                               class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed">
+                                        <input type="hidden" name="position" value="<?php echo htmlspecialchars($position); ?>">
+                                    <?php else: ?>
+                                        <select name="position"
+                                                class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                                            <?php foreach ($positions as $value => $label): ?>
+                                                <?php if ($value !== 'admin'): ?>
+                                                    <option value="<?php echo $value; ?>" <?php echo $position === $value ? 'selected' : ''; ?>>
+                                                        <?php echo $label; ?>
+                                                    </option>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php endif; ?>
+                                </div>
+                            <?php elseif ($role === 'OWNER'): ?>
+                                <!-- OWNER: ไม่มีฟิลด์พิเศษ แค่แสดงข้อความ -->
+                                <div class="md:col-span-2">
+                                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <div class="flex items-center gap-3">
+                                            <div class="text-blue-600">
+                                                <i data-lucide="crown" class="w-5 h-5"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="font-medium text-blue-800">เจ้าของร้าน</h4>
+                                                <p class="text-sm text-blue-600">คุณคือเจ้าของร้านเทมป์เทชัน</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+
+                            <!-- วันที่สมัครสมาชิก -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="calendar" class="w-4 h-4 inline mr-1"></i>
+                                    วันที่สมัครสมาชิก
+                                </label>
+                                <input type="text"
+                                       value="<?php echo $memberSince; ?>"
+                                       disabled
+                                       class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed">
+                            </div>
+
+                            <!-- อัปเดตล่าสุด -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>
+                                    อัปเดตล่าสุด
+                                </label>
+                                <input type="text"
+                                       value="<?php echo $lastUpdated; ?>"
+                                       disabled
+                                       class="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed">
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มบันทึก -->
+                        <div class="flex justify-end pt-4 border-t border-gray-200">
+                            <button type="submit"
+                                    class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition flex items-center gap-2">
+                                <i data-lucide="save" class="w-5 h-5"></i>
+                                บันทึกการเปลี่ยนแปลง
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tab: Security -->
+                <div id="tab-security" class="p-6 hidden">
+                    <div class="max-w-2xl">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">เปลี่ยนรหัสผ่าน</h3>
+
+                        <form method="POST" action="" class="space-y-6">
+                            <input type="hidden" name="action" value="change_password">
+
+                            <!-- รหัสผ่านปัจจุบัน -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="lock" class="w-4 h-4 inline mr-1"></i>
+                                    รหัสผ่านปัจจุบัน <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="password"
+                                           name="current_password"
+                                           id="current_password"
+                                           required
+                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-10">
+                                    <button type="button"
+                                            onclick="togglePassword('current_password')"
+                                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i data-lucide="eye" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- รหัสผ่านใหม่ -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="key" class="w-4 h-4 inline mr-1"></i>
+                                    รหัสผ่านใหม่ <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="password"
+                                           name="new_password"
+                                           id="new_password"
+                                           required
+                                           minlength="6"
+                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-10">
+                                    <button type="button"
+                                            onclick="togglePassword('new_password')"
+                                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i data-lucide="eye" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร</p>
+                            </div>
+
+                            <!-- ยืนยันรหัสผ่านใหม่ -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i data-lucide="check-circle" class="w-4 h-4 inline mr-1"></i>
+                                    ยืนยันรหัสผ่านใหม่ <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input type="password"
+                                           name="confirm_password"
+                                           id="confirm_password"
+                                           required
+                                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition pr-10">
+                                    <button type="button"
+                                            onclick="togglePassword('confirm_password')"
+                                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                        <i data-lucide="eye" class="w-5 h-5"></i>
+                                    </button>
+                                </div>
+                                <div id="password-match-message" class="text-xs mt-1 hidden"></div>
+                            </div>
+
+                            <!-- ปุ่มเปลี่ยนรหัสผ่าน -->
+                            <div class="flex justify-end pt-4 border-t border-gray-200">
+                                <button type="submit"
+                                        id="change-password-btn"
+                                        class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition flex items-center gap-2">
+                                    <i data-lucide="shield" class="w-5 h-5"></i>
+                                    เปลี่ยนรหัสผ่าน
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- เคล็ดลับความปลอดภัย -->
+                        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div class="flex items-start gap-3">
+                                <div class="text-blue-600">
+                                    <i data-lucide="info" class="w-5 h-5"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-medium text-blue-800 mb-1">เคล็ดลับความปลอดภัย</h4>
+                                    <ul class="text-sm text-blue-700 space-y-1">
+                                        <li>• ใช้รหัสผ่านที่คาดเดายาก มีทั้งตัวอักษร ตัวเลข และอักขระพิเศษ</li>
+                                        <li>• ไม่ควรใช้รหัสผ่านเดียวกันกับเว็บอื่น</li>
+                                        <li>• เปลี่ยนรหัสผ่านเป็นประจำทุก 3-6 เดือน</li>
+                                        <li>• ห้ามแชร์รหัสผ่านให้ผู้อื่น</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div class="border-t border-gray-100 bg-gray-50/50 p-6 grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-                <div class="flex items-start gap-3">
-                    <div class="p-2 bg-white rounded shadow-sm text-gray-400">
-                        <i data-lucide="mail" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 mb-1">อีเมล</p>
-                        <p class="font-medium text-gray-900 break-all"><?php echo htmlspecialchars($email); ?></p>
-                    </div>
-                </div>
-
-                <?php if ($phone): ?>
-                <div class="flex items-start gap-3">
-                    <div class="p-2 bg-white rounded shadow-sm text-gray-400">
-                        <i data-lucide="phone" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 mb-1">โทรศัพท์</p>
-                        <p class="font-medium text-gray-900"><?php echo htmlspecialchars($phone); ?></p>
-                    </div>
-                </div>
-                <?php endif; ?>
-            </div>
-
-            <div class="border-t border-gray-100 p-6">
-                <h3 class="text-lg font-semibold text-gray-800 mb-4">ภาพรวมบัญชี</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div class="bg-white border rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition">
-                        <div class="bg-blue-50 p-3 rounded-lg shrink-0">
-                            <i data-lucide="calendar" class="w-6 h-6 text-blue-600"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <p class="text-sm text-gray-500">การจองทั้งหมด</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $totalBookings; ?></p>
-                        </div>
-                    </div>
-
-                    <div class="bg-white border rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition">
-                        <div class="bg-green-50 p-3 rounded-lg shrink-0">
-                            <i data-lucide="check-circle" class="w-6 h-6 text-green-600"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <p class="text-sm text-gray-500">ชำระเงินแล้ว</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $paidCount; ?></p>
-                        </div>
-                    </div>
-
-                    <div class="bg-white border rounded-xl p-4 flex items-center gap-4 shadow-sm hover:shadow-md transition">
-                        <div class="bg-yellow-50 p-3 rounded-lg shrink-0">
-                            <i data-lucide="clock" class="w-6 h-6 text-yellow-600"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <p class="text-sm text-gray-500">รอชำระเงิน</p>
-                            <p class="text-2xl font-bold text-gray-900"><?php echo $unpaidCount; ?></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
     </div>
-</div>
 
-<script>
-    lucide.createIcons();
-</script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Switch tabs
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.getElementById('tab-profile').classList.add('hidden');
+            document.getElementById('tab-security').classList.add('hidden');
+
+            // Show selected tab
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+
+            // Update tab buttons
+            document.getElementById('tab-profile-btn').classList.remove('tab-active');
+            document.getElementById('tab-security-btn').classList.remove('tab-active');
+
+            document.getElementById('tab-' + tabName + '-btn').classList.add('tab-active');
+
+            // Recreate icons in new tab
+            lucide.createIcons();
+        }
+
+        // Toggle password visibility
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            const button = input.nextElementSibling;
+            const icon = button.querySelector('i');
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                input.type = 'password';
+                icon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+
+        // Check password match
+        document.addEventListener('DOMContentLoaded', function() {
+            const newPassword = document.getElementById('new_password');
+            const confirmPassword = document.getElementById('confirm_password');
+            const matchMessage = document.getElementById('password-match-message');
+            const submitBtn = document.getElementById('change-password-btn');
+
+            function checkPasswordMatch() {
+                if (confirmPassword.value) {
+                    if (newPassword.value === confirmPassword.value) {
+                        matchMessage.textContent = '✓ รหัสผ่านตรงกัน';
+                        matchMessage.className = 'text-xs mt-1 text-green-600';
+                        matchMessage.classList.remove('hidden');
+                        submitBtn.disabled = false;
+                    } else {
+                        matchMessage.textContent = '✗ รหัสผ่านไม่ตรงกัน';
+                        matchMessage.className = 'text-xs mt-1 text-red-600';
+                        matchMessage.classList.remove('hidden');
+                        submitBtn.disabled = true;
+                    }
+                } else {
+                    matchMessage.classList.add('hidden');
+                    submitBtn.disabled = false;
+                }
+            }
+
+            if (newPassword && confirmPassword) {
+                newPassword.addEventListener('keyup', checkPasswordMatch);
+                confirmPassword.addEventListener('keyup', checkPasswordMatch);
+            }
+        });
+    </script>
+</body>
+</html>

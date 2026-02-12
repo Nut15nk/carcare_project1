@@ -121,6 +121,8 @@
         'READY'       => '<span class="px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">พร้อมใช้งาน</span>',
         'MAINTENANCE' => '<span class="px-3 py-1.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-medium">ซ่อมบำรุง</span>',
         'CLEANING'    => '<span class="px-3 py-1.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">ทำความสะอาด</span>',
+        'DAMAGED'     => '<span class="px-3 py-1.5 rounded-full bg-red-100 text-red-700 text-xs font-medium">เสียหายรุนแรง</span>',
+        'LOST'        => '<span class="px-3 py-1.5 rounded-full bg-gray-900 text-white text-xs font-medium">สูญหาย</span>',
         'UNAVAILABLE' => '<span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">ไม่พร้อมใช้งาน</span>',
         default       => '<span class="px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">' . $status . '</span>',
     };
@@ -132,6 +134,8 @@
         'READY'       => 'พร้อมใช้งาน',
         'MAINTENANCE' => 'ซ่อมบำรุง',
         'CLEANING'    => 'ทำความสะอาด',
+        'DAMAGED'     => 'เสียหายรุนแรง',
+        'LOST'        => 'สูญหาย',
         'UNAVAILABLE' => 'ไม่พร้อมใช้งาน',
         default       => $status,
     };
@@ -480,7 +484,13 @@
                         </label>
                         <select name="maintenance_status"
                                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
-                            <?php foreach (['READY' => 'พร้อมใช้งาน', 'MAINTENANCE' => 'ซ่อมบำรุง', 'CLEANING' => 'ทำความสะอาด', 'UNAVAILABLE' => 'ไม่พร้อมใช้งาน'] as $value => $label): ?>
+                                <?php foreach ([
+                                        'READY'       => 'พร้อมใช้งาน',
+                                        'MAINTENANCE' => 'ซ่อมบำรุง',
+                                        'CLEANING'    => 'ทำความสะอาด',
+                                        'DAMAGED'     => 'เสียหายรุนแรง',
+                                        'LOST'        => 'สูญหาย',
+                                    'UNAVAILABLE' => 'ไม่พร้อมใช้งาน'] as $value => $label): ?>
                                 <option value="<?php echo $value; ?>"
                                     <?php echo(($editMotorcycle['maintenanceStatus'] ?? 'READY') === $value) ? 'selected' : ''; ?>>
                                     <?php echo $label; ?>
@@ -676,17 +686,23 @@
                                 แสดง <span class="font-semibold"><?php echo count($motorcycles); ?></span> รายการ
                             </div>
                             <div class="flex items-center space-x-4">
-                                <span class="inline-flex items-center text-sm">
-                                    <span class="w-3 h-3 rounded-full bg-green-100 mr-1"></span>
-                                    พร้อมใช้งาน
-                                    <span class="mx-2">•</span>
-                                    <span class="w-3 h-3 rounded-full bg-yellow-100 mr-1"></span>
-                                    ซ่อมบำรุง
-                                    <span class="mx-2">•</span>
-                                    <span class="w-3 h-3 rounded-full bg-red-100 mr-1"></span>
-                                    ไม่ว่าง
-                                </span>
-                            </div>
+                            <span class="inline-flex items-center text-sm">
+                                <span class="w-3 h-3 rounded-full bg-green-100 mr-1"></span>
+                                พร้อมใช้งาน
+                                <span class="mx-2">•</span>
+                                <span class="w-3 h-3 rounded-full bg-yellow-100 mr-1"></span>
+                                ซ่อมบำรุง
+                                <span class="mx-2">•</span>
+                                <span class="w-3 h-3 rounded-full bg-red-100 mr-1"></span>
+                                เสียหายรุนแรง
+                                <span class="mx-2">•</span>
+                                <span class="w-3 h-3 rounded-full bg-gray-900 mr-1"></span>
+                                สูญหาย
+                                <span class="mx-2">•</span>
+                                <span class="w-3 h-3 rounded-full bg-gray-100 mr-1"></span>
+                                ไม่ว่าง
+                            </span>
+                        </div>
                         </div>
                     </div>
                 <?php endif; ?>
