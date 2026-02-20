@@ -1,6 +1,6 @@
 -- สร้างฐานข้อมูล
 CREATE DATABASE IF NOT EXISTS motorcycle_rental_new;
-USE otorcycle_rental_new;
+USE motorcycle_rental_new;
 
 -- 1. ตารางเจ้าของร้าน
 CREATE TABLE owners (

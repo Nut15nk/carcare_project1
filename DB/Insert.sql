@@ -18,11 +18,11 @@ INSERT INTO employees (employee_id, owner_id, email, password_hash, first_name, 
 -- =========================
 -- 3. customers (NEW STRUCTURE)
 -- =========================
-INSERT INTO customers (customer_id, email, password_hash, first_name, last_name, phone, is_active) VALUES
-('cust001', 'john.doe@email.com', '$2a$10$examplehash6', 'John', 'Doe', '0856789012', 1),
-('cust002', 'jane.smith@email.com', '$2a$10$examplehash7', 'Jane', 'Smith', '0867890123', 1),
-('cust003', 'surasak@email.com', '$2a$10$examplehash8', 'สุรศักดิ์', 'เดินทาง', '0878901234', 1),
-('cust004', 'testuser@email.com', '$2a$10$examplehash9', 'ทดสอบ', 'ระบบ', '0812345678', 1);
+INSERT INTO customers (customer_id, email, password_hash, first_name, last_name, phone, line_id, is_active) VALUES
+('cust001', 'john.doe@email.com', '$2a$10$examplehash6', 'John', 'Doe', '0856789012', 'line_id_001', 1),
+('cust002', 'jane.smith@email.com', '$2a$10$examplehash7', 'Jane', 'Smith', '0867890123', 'line_id_002', 1),
+('cust003', 'surasak@email.com', '$2a$10$examplehash8', 'สุรศักดิ์', 'เดินทาง', '0878901234', 'line_id_003', 1),
+('cust004', 'testuser@email.com', '$2a$10$examplehash9', 'ทดสอบ', 'ระบบ', '0812345678', 'line_id_004', 1);
 
 INSERT INTO motorcycles
 (motorcycle_id,brand,model,year,license_plate,color,engine_cc,price_per_day,image_url,is_available,description,maintenance_status)

@@ -7,7 +7,7 @@ define('IMGBB_API_KEY', 'ca1491832f92840f671270432d9afd85');
 class Database
 {
     private static $host    = 'localhost';
-    private static $db      = 'motorcycle_rental_new';
+    private static $db      = 'motorcycle_rental_new1';
     private static $user    = 'Mayochiki_MN';
     private static $pass    = 'Mayochiki@2003';
     private static $charset = 'utf8mb4';
