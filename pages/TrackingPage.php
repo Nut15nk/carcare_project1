@@ -23,7 +23,7 @@
     require_once __DIR__ . '/../service/BookingTrackingService.php';
 
     // ตรวจสอบการเข้าถึง
-    $customerId    = $_SESSION['user']['userId'] ?? $_SESSION['user_id'] ?? '';
+    $customerId    = $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? '';
     $reservationId = $_GET['reservation'] ?? '';
 
     if (empty($reservationId)) {

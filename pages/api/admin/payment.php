@@ -11,10 +11,10 @@ use Service\Admin\AdminService;
 header('Content-Type: application/json');
 
 try {
-    // ✅ FIX: อนุญาต owner + staff
+    // ✅ FIX: อนุญาต owner + employee (เปลี่ยนจาก staff เป็น employee)
     if (
         ! isset($_SESSION['user']) ||
-        ! in_array($_SESSION['user']['role'] ?? '', ['owner', 'staff'], true)
+        ! in_array(strtolower($_SESSION['user']['role'] ?? ''), ['owner', 'admin', 'employee'], true)
     ) {
         throw new Exception('Unauthorized');
     }
@@ -75,3 +75,4 @@ try {
         'error'   => $e->getMessage(),
     ]);
 }
+?>

@@ -16,7 +16,8 @@
     require_once __DIR__ . '/../service/PaymentService.php';
     require_once __DIR__ . '/../service/MotorcycleService.php';
 
-    $customerId = $_SESSION['user']['userId'] ?? $_SESSION['user_id'] ?? '';
+    // ✅ แก้ไข: เปลี่ยนจาก userId เป็น id ตามโครงสร้าง session ที่ถูกต้อง
+    $customerId = $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? '';
     $bookings   = [];
     $paymentMap = [];
 
@@ -106,6 +107,7 @@
     }
 ?>
 
+<!-- ส่วน HTML และ JavaScript ที่เหลือเหมือนเดิมทุกประการ -->
 <div class="min-h-screen bg-gray-50 py-8">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h1 class="text-3xl font-bold text-gray-900 mb-4">การจองของฉัน</h1>
@@ -232,9 +234,8 @@
                                     <i data-lucide="credit-card" class="h-4 w-4"></i> ชำระเงินทันที
                                 </a>
                                 <?php endif; ?>
-
-                                <a href="index.php?page=booking-confirmation&reservation=<?php echo $booking['reservationId']; ?>"
-                                   class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+                                <a href="index.php?page=tracking&reservation=<?php echo $booking['reservationId']; ?>"
+                                class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
                                     <i data-lucide="file-text" class="h-4 w-4"></i> ติดตามสถานะการจอง
                                 </a>
                             </div>

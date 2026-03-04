@@ -28,7 +28,8 @@
 
     $motorcycle_id = $_GET['id'] ?? null;
     $motorcycle    = $motorcycle_id ? MotorcycleService::getMotorcycleById($motorcycle_id) : null;
-    $customerId    = $_SESSION['user']['userId'] ?? $_SESSION['user_id'] ?? null;
+    // ✅ แก้ไข: เปลี่ยนจาก userId เป็น id ตามโครงสร้าง session ที่ถูกต้อง
+    $customerId    = $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? null;
 
     // รับวันที่จากหน้ารถ (ถ้ามี)
     $startDateFromUrl = $_GET['start_date'] ?? '';
@@ -74,11 +75,23 @@
     $discountCode   = strtoupper(trim($_POST['discount_code'] ?? ''));
     $discountAmount = floatval($_POST['discount_amount'] ?? 0);
 
-    // Log raw input
-    error_log("Booking POST: start_date={$startDateRaw}, end_date={$endDateRaw}");
+    // ✅ เพิ่ม: debug logging
+    error_log("=== Booking Debug ===");
+    error_log("customerId: " . ($customerId ?? 'NULL'));
+    error_log("startDateRaw: " . $startDateRaw);
+    error_log("endDateRaw: " . $endDateRaw);
+    error_log("pickupLocation: " . $pickupLocation);
+    error_log("returnLocation: " . $returnLocation);
+    error_log("motorcycle: " . ($motorcycle ? 'found' : 'not found'));
 
-    if (empty($startDateRaw) || empty($endDateRaw) || empty($pickupLocation) || empty($returnLocation) || ! $motorcycle || ! $customerId) {
+    // ✅ เพิ่ม: ตรวจสอบ customerId โดยเฉพาะ
+    if (!$customerId) {
+        $error = 'ไม่พบข้อมูลลูกค้า กรุณาเข้าสู่ระบบใหม่อีกครั้ง';
+        error_log("ERROR: customerId is null or empty");
+    }
+    elseif (empty($startDateRaw) || empty($endDateRaw) || empty($pickupLocation) || empty($returnLocation) || ! $motorcycle || ! $customerId) {
         $error = 'กรุณากรอกข้อมูลให้ครบถ้วน';
+        error_log("ERROR: Missing required fields");
     } else {
         try {
             // ตรวจสอบว่าช่วงวันที่นี้ว่างหรือไม่
@@ -150,7 +163,7 @@
                         if ($bookingId) {
                             $_SESSION['flash_message'] = [
                                 'type'    => 'success',
-                                'message' => 'จองสำเร็จ! เราจะติดต่อกลับภายใน 24 ชั่วโมง',
+                                'message' => 'จองสำเร็จ!',
                             ];
                             header("Location: index.php?page=my-bookings");
                             exit;
@@ -355,7 +368,7 @@
                                 </div>
                         </div>
 
-                        <!-- Time Selection -->
+                        <!-- ✅ แก้ไขเฉพาะส่วนเวลาเท่านั้น: เปลี่ยนเป็น dropdown ทุก 30 นาที -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -364,15 +377,31 @@
                                 </label>
                                 <select name="pickup_time"
                                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="09:00">09:00 น.</option>
+                                    <option value="08:00">08:00 น.</option>
+                                    <option value="08:30">08:30 น.</option>
+                                    <option value="09:00" selected>09:00 น.</option>
+                                    <option value="09:30">09:30 น.</option>
                                     <option value="10:00">10:00 น.</option>
+                                    <option value="10:30">10:30 น.</option>
                                     <option value="11:00">11:00 น.</option>
+                                    <option value="11:30">11:30 น.</option>
                                     <option value="12:00">12:00 น.</option>
+                                    <option value="12:30">12:30 น.</option>
                                     <option value="13:00">13:00 น.</option>
+                                    <option value="13:30">13:30 น.</option>
                                     <option value="14:00">14:00 น.</option>
+                                    <option value="14:30">14:30 น.</option>
                                     <option value="15:00">15:00 น.</option>
+                                    <option value="15:30">15:30 น.</option>
                                     <option value="16:00">16:00 น.</option>
+                                    <option value="16:30">16:30 น.</option>
                                     <option value="17:00">17:00 น.</option>
+                                    <option value="17:30">17:30 น.</option>
+                                    <option value="18:00">18:00 น.</option>
+                                    <option value="18:30">18:30 น.</option>
+                                    <option value="19:00">19:00 น.</option>
+                                    <option value="19:30">19:30 น.</option>
+                                    <option value="20:00">20:00 น.</option>
                                 </select>
                             </div>
                             <div>
@@ -382,15 +411,31 @@
                                 </label>
                                 <select name="return_time"
                                         class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="08:00">08:00 น.</option>
+                                    <option value="08:30">08:30 น.</option>
                                     <option value="09:00">09:00 น.</option>
+                                    <option value="09:30">09:30 น.</option>
                                     <option value="10:00">10:00 น.</option>
+                                    <option value="10:30">10:30 น.</option>
                                     <option value="11:00">11:00 น.</option>
+                                    <option value="11:30">11:30 น.</option>
                                     <option value="12:00">12:00 น.</option>
+                                    <option value="12:30">12:30 น.</option>
                                     <option value="13:00">13:00 น.</option>
+                                    <option value="13:30">13:30 น.</option>
                                     <option value="14:00">14:00 น.</option>
+                                    <option value="14:30">14:30 น.</option>
                                     <option value="15:00">15:00 น.</option>
+                                    <option value="15:30">15:30 น.</option>
                                     <option value="16:00">16:00 น.</option>
-                                    <option value="17:00">17:00 น.</option>
+                                    <option value="16:30">16:30 น.</option>
+                                    <option value="17:00" selected>17:00 น.</option>
+                                    <option value="17:30">17:30 น.</option>
+                                    <option value="18:00">18:00 น.</option>
+                                    <option value="18:30">18:30 น.</option>
+                                    <option value="19:00">19:00 น.</option>
+                                    <option value="19:30">19:30 น.</option>
+                                    <option value="20:00">20:00 น.</option>
                                 </select>
                             </div>
                         </div>
@@ -525,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const returnDetailsContainer = document.getElementById('return-details-container');
 
     /* =====================================================
-       ✅ เพิ่ม: renderPrice (เพราะ calculatePrice เรียกใช้)
+       ✅ renderPrice
        ===================================================== */
     function renderPrice(days, totalPrice, discountAmount, finalPrice, depositAmount)
     {
@@ -545,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
             '฿' + depositAmount.toLocaleString('th-TH');
     }
 
-    // ฟังก์ชันคำนวณราคา (ไม่เปลี่ยน logic เดิม)
+    // ฟังก์ชันคำนวณราคา
     function calculatePrice(){
         const days = calculateDays();
 
@@ -566,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ฟังก์ชันตรวจสอบโค้ดส่วนลด
     async function checkDiscountCode(code) {
         if (!code.trim()) {
-            promoDiscount = 0; // ✅ รีเซ็ต
+            promoDiscount = 0;
             discountMessage.textContent = '';
             discountMessage.className   = 'text-sm mt-2';
             calculatePrice();
@@ -588,7 +633,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
 
             if (data.valid) {
-                promoDiscount = Math.round(data.discountAmount); // ✅ เก็บค่าไว้
+                promoDiscount = Math.round(data.discountAmount);
                 document.getElementById('discount_amount').value = promoDiscount;
 
                 discountMessage.textContent = '✅ ' + data.message;
@@ -601,7 +646,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 discountMessage.className   = 'text-sm mt-2 text-red-600';
             }
 
-            calculatePrice(); // ✅ คิดใหม่เสมอ
+            calculatePrice();
 
         } catch (error) {
             promoDiscount = 0;
@@ -611,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // คำนวณจำนวนวัน (ของเดิม)
+    // คำนวณจำนวนวัน
     function calculateDays()
     {
         if (!startDateInput.value || !endDateInput.value) {
@@ -624,7 +669,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return Math.floor(timeDiff / (1000 * 3600 * 24)) + 1;
     }
 
-    // toggleDetailsFields (ของเดิม ไม่แตะ)
+    // toggleDetailsFields
     function toggleDetailsFields()
     {
         const pickupValue = pickupLocationSelect.value;
@@ -640,7 +685,7 @@ document.addEventListener('DOMContentLoaded', function() {
         );
     }
 
-    // Event Listeners (ของเดิมทั้งหมด)
+    // Event Listeners
     startDateInput.addEventListener('change', calculatePrice);
     endDateInput.addEventListener('change', calculatePrice);
 

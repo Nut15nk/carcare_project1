@@ -35,7 +35,7 @@
     $page = $_GET['page'] ?? 'home';
 
     // ===== API ROUTER (สำคัญมาก) =====
-    if (($_GET['page'] ?? '') === 'api') {
+    if (($page) === 'api') {
     require __DIR__ . '/pages/api.php';
     exit;
     }
@@ -46,6 +46,7 @@
     'motorcycles'          => 'pages/MotorcyclesPages.php',
     'booking'              => 'pages/BookingPages.php',
     'booking-confirmation' => 'pages/TrackingPage.php',
+    'tracking'             => 'pages/TrackingPage.php', // เพิ่ม tracking ด้วย
     'payment'              => 'pages/PaymentPages.php',
     'my-bookings'          => 'pages/MyBookings.php',
     'profile'              => 'pages/ProfilePages.php',
@@ -58,11 +59,8 @@
     $contentFile = $pageMap[$page];
     } else {
     http_response_code(404);
-    $contentFile = 'pages/404.php';
+    $contentFile = 'pages/404.php'; // ใช้ไฟล์ 404 ที่เราสร้าง
     }
-
-    // --- หมายเหตุ ---
-    // ลบ POST handler ของ booking ออกไป เพื่อให้ BookingPages.php จัดการเอง
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -80,7 +78,7 @@
 
     <!-- Flash Message -->
     <?php if ($flash_message): ?>
-        <div class="fixed top-20 right-4 z-50<?php echo $flash_message['type'] === 'error' ? 'bg-red-500' : 'bg-green-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
+        <div class="fixed top-20 right-4 z-50 <?php echo $flash_message['type'] === 'error' ? 'bg-red-500' : 'bg-green-500'; ?> text-white px-6 py-3 rounded-lg shadow-lg">
             <?php echo $flash_message['message']; ?>
         </div>
     <?php endif; ?>
@@ -92,7 +90,13 @@
                 include $contentFile;
             } else {
                 echo "<p class='text-center text-red-500 p-4'>Error: Content file not found.</p>";
-                include 'pages/404.php';
+                // ถ้าไม่มีไฟล์ 404 จริงๆ ก็แสดงข้อความธรรมดา
+                echo "<div class='min-h-[60vh] flex items-center justify-center'>";
+                echo "<div class='text-center'>";
+                echo "<h1 class='text-4xl font-bold text-gray-900 mb-4'>404</h1>";
+                echo "<p class='text-gray-600 mb-8'>ไม่พบหน้าที่คุณต้องการ</p>";
+                echo "<a href='index.php?page=home' class='bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg'>กลับหน้าหลัก</a>";
+                echo "</div></div>";
             }
         ?>
     </main>
